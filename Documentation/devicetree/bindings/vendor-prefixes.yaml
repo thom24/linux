@@ -1163,6 +1163,8 @@ patternProperties:
     description: Shenzhen Roofull Technology Co, Ltd
   "^roseapplepi,.*":
     description: RoseapplePi.org
+  "^rpmsg,.*":
+    description: remote processor messaging Device Specification
   "^saef,.*":
     description: Saef Technology Limited
   "^samsung,.*":

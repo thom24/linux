@@ -906,6 +906,7 @@ static int pci_epf_test_bind(struct pci_epf *epf)
 	struct pci_epc *epc = epf->epc;
 	bool linkup_notifier = false;
 	bool core_init_notifier = false;
+	bool force_core_init = false;
 
 	if (WARN_ON_ONCE(!epc))
 		return -EINVAL;
@@ -918,6 +919,7 @@ static int pci_epf_test_bind(struct pci_epf *epf)
 
 	linkup_notifier = epc_features->linkup_notifier;
 	core_init_notifier = epc_features->core_init_notifier;
+	force_core_init = epc_features->force_core_init;
 	test_reg_bar = pci_epc_get_first_free_bar(epc_features);
 	if (test_reg_bar < 0)
 		return -EINVAL;
@@ -930,7 +932,7 @@ static int pci_epf_test_bind(struct pci_epf *epf)
 	if (ret)
 		return ret;
 
-	if (!core_init_notifier) {
+	if (!core_init_notifier || force_core_init) {
 		ret = pci_epf_test_core_init(epf);
 		if (ret)
 			return ret;

@@ -192,6 +192,17 @@
 			reg = <0x00 0xab100000 0x00 0xf00000>;
 			no-map;
 		};
+
+		lpm_r5_spl_ctx_ddr: lpm-memory@ac000000 {
+			reg = <0x00 0xac000000 0x00 0x1000000>;
+			no-map;
+		};
+
+		lpm_bl31_ctx_ddr: lpm-memory@ad000000 {
+			reg = <0x00 0xad000000 0x00 0x20000>;
+			no-map;
+		};
+
 	};
 
 	evm_12v0: regulator-evm12v0 {

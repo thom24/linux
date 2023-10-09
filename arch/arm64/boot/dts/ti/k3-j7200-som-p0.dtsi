@@ -82,6 +82,16 @@
 			alignment = <0x1000>;
 			no-map;
 		};
+
+		lpm_r5_spl_ctx_ddr: lpm-memory@a5000000 {
+			reg = <0x00 0xa5000000 0x00 0x1000000>;
+			no-map;
+		};
+
+		lpm_bl31_ctx_ddr: lpm-memory@a6000000 {
+			reg = <0x00 0xa6000000 0x00 0x20000>;
+			no-map;
+		};
 	};
 
 	mux0: mux-controller-0 {

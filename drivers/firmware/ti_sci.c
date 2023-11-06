@@ -83,12 +83,24 @@ struct ti_sci_xfers_info {
  * @max_msgs: Maximum number of messages that can be pending
  *		  simultaneously in the system
  * @max_msg_size: Maximum size of data per message that can be handled.
+ * @restore_irqs: Set to true if allocated irqs shall be restored at resume
  */
 struct ti_sci_desc {
 	u8 default_host_id;
 	int max_rx_timeout_ms;
 	int max_msgs;
 	int max_msg_size;
+	bool restore_irqs;
+};
+
+/**
+ * struct ti_sci_irq - Description of allocated irqs
+ * @list: List head
+ * @desc: Description of the irq
+ */
+struct ti_sci_irq {
+	struct list_head list;
+	struct ti_sci_msg_req_manage_irq desc;
 };
 
 /**
@@ -104,6 +116,7 @@ struct ti_sci_desc {
  * @chan_tx:	Transmit mailbox channel
  * @chan_rx:	Receive mailbox channel
  * @minfo:	Message info
+ * @irqs:	List of allocated irqs
  * @node:	list head
  * @host_id:	Host ID
  * @ctx_mem_addr: Low power context memory phys address
@@ -123,6 +136,7 @@ struct ti_sci_info {
 	struct mbox_chan *chan_tx;
 	struct mbox_chan *chan_rx;
 	struct ti_sci_xfers_info minfo;
+	struct ti_sci_irq irqs;
 	struct list_head node;
 	u8 host_id;
 	dma_addr_t ctx_mem_addr;
@@ -2289,6 +2303,29 @@ fail:
 }
 
 /**
+ * ti_sci_irqs_equal() - Helper API to compare two irqs (generic headers are not
+ *                       compared)
+ * @irq_a:	IRQ A to compare
+ * @irq_b:	IRQ B to compare
+ *
+ * Return: true if the two irqs are equal, else false.
+ */
+static bool ti_sci_irqs_equal(struct ti_sci_msg_req_manage_irq irq_a,
+			      struct ti_sci_msg_req_manage_irq irq_b)
+{
+	return irq_a.valid_params == irq_b.valid_params &&
+		irq_a.src_id == irq_b.src_id &&
+		irq_a.src_index == irq_b.src_index &&
+		irq_a.dst_id == irq_b.dst_id &&
+		irq_a.dst_host_irq == irq_b.dst_host_irq &&
+		irq_a.ia_id == irq_b.ia_id &&
+		irq_a.vint == irq_b.vint &&
+		irq_a.global_event == irq_b.global_event &&
+		irq_a.vint_status_bit == irq_b.vint_status_bit &&
+		irq_a.secondary_host == irq_b.secondary_host;
+}
+
+/**
  * ti_sci_set_irq() - Helper api to configure the irq route between the
  *		      requested source and destination
  * @handle:		Pointer to TISCI handle.
@@ -2311,15 +2348,39 @@ static int ti_sci_set_irq(const struct ti_sci_handle *handle, u32 valid_params,
 			  u16 dst_host_irq, u16 ia_id, u16 vint,
 			  u16 global_event, u8 vint_status_bit, u8 s_host)
 {
+	struct ti_sci_info *info = handle_to_ti_sci_info(handle);
+	struct ti_sci_msg_req_manage_irq *desc;
+	struct ti_sci_irq *irq;
+	int ret;
+
 	pr_debug("%s: IRQ set with valid_params = 0x%x from src = %d, index = %d, to dst = %d, irq = %d,via ia_id = %d, vint = %d, global event = %d,status_bit = %d\n",
 		 __func__, valid_params, src_id, src_index,
 		 dst_id, dst_host_irq, ia_id, vint, global_event,
 		 vint_status_bit);
 
-	return ti_sci_manage_irq(handle, valid_params, src_id, src_index,
+	ret = ti_sci_manage_irq(handle, valid_params, src_id, src_index,
 				 dst_id, dst_host_irq, ia_id, vint,
 				 global_event, vint_status_bit, s_host,
 				 TI_SCI_MSG_SET_IRQ);
+
+	if (ret)
+		return ret;
+
+	irq = kmalloc(sizeof(*irq), GFP_KERNEL);
+	desc = &irq->desc;
+	desc->valid_params = valid_params;
+	desc->src_id = src_id;
+	desc->src_index = src_index;
+	desc->dst_id = dst_id;
+	desc->dst_host_irq = dst_host_irq;
+	desc->ia_id = ia_id;
+	desc->vint = vint;
+	desc->global_event = global_event;
+	desc->vint_status_bit = vint_status_bit;
+	desc->secondary_host = s_host;
+	list_add(&irq->list, &info->irqs.list);
+
+	return ret;
 }
 
 /**
@@ -2345,15 +2406,46 @@ static int ti_sci_free_irq(const struct ti_sci_handle *handle, u32 valid_params,
 			   u16 dst_host_irq, u16 ia_id, u16 vint,
 			   u16 global_event, u8 vint_status_bit, u8 s_host)
 {
+	struct ti_sci_info *info = handle_to_ti_sci_info(handle);
+	struct ti_sci_msg_req_manage_irq irq_desc;
+	struct ti_sci_irq *this_irq;
+	struct list_head *this;
+	int ret;
+
 	pr_debug("%s: IRQ release with valid_params = 0x%x from src = %d, index = %d, to dst = %d, irq = %d,via ia_id = %d, vint = %d, global event = %d,status_bit = %d\n",
 		 __func__, valid_params, src_id, src_index,
 		 dst_id, dst_host_irq, ia_id, vint, global_event,
 		 vint_status_bit);
 
-	return ti_sci_manage_irq(handle, valid_params, src_id, src_index,
-				 dst_id, dst_host_irq, ia_id, vint,
-				 global_event, vint_status_bit, s_host,
-				 TI_SCI_MSG_FREE_IRQ);
+	ret = ti_sci_manage_irq(handle, valid_params, src_id, src_index,
+				dst_id, dst_host_irq, ia_id, vint,
+				global_event, vint_status_bit, s_host,
+				TI_SCI_MSG_FREE_IRQ);
+
+	if (ret)
+		return ret;
+
+	irq_desc.valid_params = valid_params;
+	irq_desc.src_id = src_id;
+	irq_desc.src_index = src_index;
+	irq_desc.dst_id = dst_id;
+	irq_desc.dst_host_irq = dst_host_irq;
+	irq_desc.ia_id = ia_id;
+	irq_desc.vint = vint;
+	irq_desc.global_event = global_event;
+	irq_desc.vint_status_bit = vint_status_bit;
+	irq_desc.secondary_host = s_host;
+
+	list_for_each(this, &info->irqs.list) {
+		this_irq = list_entry(this, struct ti_sci_irq, list);
+		if (ti_sci_irqs_equal(irq_desc, this_irq->desc)) {
+			list_del(&this_irq->list);
+			kfree(this_irq);
+			break;
+		}
+	}
+
+	return ret;
 }
 
 /**
@@ -3750,12 +3842,31 @@ static int ti_sci_suspend_noirq(struct device *dev)
 	return 0;
 }
 
-static int ti_sci_resume(struct device *dev)
+static int __maybe_unused ti_sci_resume_noirq(struct device *dev)
 {
+	const struct ti_sci_desc *desc = device_get_match_data(dev);
 	struct ti_sci_info *info = dev_get_drvdata(dev);
+	struct ti_sci_msg_req_manage_irq *irq_desc;
+	struct ti_sci_irq *irq;
+	struct list_head *this;
 	u32 source;
 	u64 time;
 	int ret = 0;
+
+	if (!desc->restore_irqs || pm_suspend_target_state != PM_SUSPEND_MEM)
+		return ret;
+
+	/* restore irqs */
+	list_for_each(this, &info->irqs.list) {
+		irq = list_entry(this, struct ti_sci_irq, list);
+		irq_desc = &irq->desc;
+		ret |=	ti_sci_manage_irq(&info->handle, irq_desc->valid_params,
+					  irq_desc->src_id, irq_desc->src_index,
+					  irq_desc->dst_id, irq_desc->dst_host_irq,
+					  irq_desc->ia_id, irq_desc->vint,
+					  irq_desc->global_event, irq_desc->vint_status_bit,
+					  irq_desc->secondary_host, TI_SCI_MSG_SET_IRQ);
+	}
 
 	ret = ti_sci_cmd_set_io_isolation(&info->handle, TISCI_MSG_VALUE_IO_DISABLE);
 	if (ret)
@@ -3765,13 +3876,12 @@ static int ti_sci_resume(struct device *dev)
 	ti_sci_msg_cmd_lpm_wake_reason(&info->handle, &source, &time);
 	dev_info(dev, "%s: wakeup source: 0x%X\n", __func__, source);
 
-	return 0;
+	return ret;
 }
 
 static const struct dev_pm_ops ti_sci_pm_ops = {
 	.suspend = ti_sci_suspend,
-	.suspend_noirq = ti_sci_suspend_noirq,
-	.resume_noirq = ti_sci_resume,
+	SET_NOIRQ_SYSTEM_SLEEP_PM_OPS(ti_sci_suspend_noirq, ti_sci_resume_noirq)
 };
 
 static int ti_sci_init_suspend(struct platform_device *pdev,
@@ -3893,9 +4003,21 @@ static const struct ti_sci_desc ti_sci_pmmc_am654_desc = {
 	.max_msg_size = 60,
 };
 
+/* Description for J7200 */
+static const struct ti_sci_desc ti_sci_pmmc_j7200_desc = {
+	.default_host_id = 2,
+	/* Conservative duration */
+	.max_rx_timeout_ms = 1000,
+	/* Limited by MBOX_TX_QUEUE_LEN. K2G can handle up to 128 messages! */
+	.max_msgs = 20,
+	.max_msg_size = 64,
+	.restore_irqs = true,
+};
+
 static const struct of_device_id ti_sci_of_match[] = {
 	{.compatible = "ti,k2g-sci", .data = &ti_sci_pmmc_k2g_desc},
 	{.compatible = "ti,am654-sci", .data = &ti_sci_pmmc_am654_desc},
+	{.compatible = "ti,j7200-sci", .data = &ti_sci_pmmc_j7200_desc},
 	{ /* Sentinel */ },
 };
 MODULE_DEVICE_TABLE(of, ti_sci_of_match);
@@ -4051,6 +4173,8 @@ static int ti_sci_probe(struct platform_device *pdev)
 		 info->handle.version.abi_major, info->handle.version.abi_minor,
 		 info->handle.version.firmware_revision,
 		 info->handle.version.firmware_description);
+
+	INIT_LIST_HEAD(&info->irqs.list);
 
 	mutex_lock(&ti_sci_list_mutex);
 	list_add_tail(&info->node, &ti_sci_list);

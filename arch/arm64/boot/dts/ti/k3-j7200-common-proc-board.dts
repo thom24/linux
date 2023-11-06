@@ -252,6 +252,12 @@
 			J721E_IOPAD(0x38, PIN_OUTPUT, 0) /* (Y21) MCAN3_TX */
 		>;
 	};
+
+	gpio0_12: gpio0_12 {
+		pinctrl-single,pins = <
+			J721E_IOPAD(0x2c, PIN_INPUT, 7) /* GPIO0_12 */
+		>;
+	};
 };
 
 &main_pmx1 {

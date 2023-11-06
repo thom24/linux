@@ -812,6 +812,8 @@
 		clocks = <&k3_clks 105 0>;
 		clock-names = "gpio";
 		status = "disabled";
+		pinctrl-0 = <&gpio0_12>;
+		pinctrl-names = "default";
 	};
 
 	main_gpio2: gpio@610000 {

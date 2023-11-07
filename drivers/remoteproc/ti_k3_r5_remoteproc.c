@@ -20,6 +20,7 @@
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/remoteproc.h>
+#include <linux/suspend.h>
 #include <linux/reset.h>
 #include <linux/slab.h>
 
@@ -112,6 +113,7 @@ struct k3_r5_cluster {
 	struct list_head cores;
 	wait_queue_head_t core_transition;
 	const struct k3_r5_soc_data *soc_data;
+	struct notifier_block pm_notifier;
 };
 
 /**
@@ -576,7 +578,8 @@ static int k3_r5_rproc_start(struct rproc *rproc)
 		/* do not allow core 1 to start before core 0 */
 		core0 = list_first_entry(&cluster->cores, struct k3_r5_core,
 					 elem);
-		if (core != core0 && core0->rproc->state == RPROC_OFFLINE) {
+		if (core != core0 && (core0->rproc->state == RPROC_OFFLINE ||
+				      core0->rproc->state == RPROC_SUSPENDED)) {
 			dev_err(dev, "%s: can not start core 1 before core 0\n",
 				__func__);
 			return -EPERM;
@@ -645,7 +648,8 @@ static int k3_r5_rproc_stop(struct rproc *rproc)
 		/* do not allow core 0 to stop before core 1 */
 		core1 = list_last_entry(&cluster->cores, struct k3_r5_core,
 					elem);
-		if (core != core1 && core1->rproc->state != RPROC_OFFLINE) {
+		if (core != core1 && core1->rproc->state != RPROC_OFFLINE &&
+		    core1->rproc->state != RPROC_SUSPENDED) {
 			dev_err(dev, "%s: can not stop core 0 before core 1\n",
 				__func__);
 			ret = -EPERM;
@@ -1215,6 +1219,178 @@ static int k3_r5_rproc_configure_mode(struct k3_r5_rproc *kproc)
 	return ret;
 }
 
+static int k3_r5_rproc_suspend(struct k3_r5_rproc *kproc)
+{
+	struct k3_r5_cluster *cluster = kproc->cluster;
+	unsigned int rproc_state = kproc->rproc->state;
+	struct device *cdev = kproc->core->dev;
+	struct k3_r5_core *core;
+	int ret;
+
+	if (rproc_state != RPROC_RUNNING && rproc_state != RPROC_ATTACHED) {
+		ret = 0;
+		goto out;
+	}
+
+	if (device_may_wakeup(kproc->dev)) {
+		/* TODO: support rproc as wake-up source */
+		ret = -EBUSY;
+		goto out;
+	}
+
+	if (rproc_state == RPROC_RUNNING) {
+		ret = rproc_shutdown(kproc->rproc);
+		if (ret) {
+			dev_err(kproc->dev,
+				"failed to shutdown rproc (%d)\n", ret);
+			goto out;
+		}
+	}
+
+	list_for_each_entry(core, &cluster->cores, elem) {
+		/*
+		 * In split mode, release only current core.
+		 * Otherwise, release all cores.
+		 */
+		if ((cluster->mode != CLUSTER_MODE_SPLIT) ||
+		    ((cluster->mode == CLUSTER_MODE_SPLIT)
+		     && (core == kproc->core))) {
+			ret = ti_sci_proc_release(core->tsp);
+			if (ret)
+				dev_err(cdev, "unable to release processor control from ti-sci handle");
+		}
+	}
+
+	if (rproc_state == RPROC_ATTACHED) {
+		ret = rproc_detach(kproc->rproc);
+		if (ret) {
+			dev_err(kproc->dev,
+				"failed to detach rproc (%d)\n", ret);
+			goto out;
+		}
+	} else {
+		core = kproc->core;
+
+		ret = core->ti_sci->ops.dev_ops.put_device(core->ti_sci,
+							   core->ti_sci_id);
+		if (ret) {
+			dev_err(cdev, "module-reset assert failed, ret = %d\n",
+				ret);
+			if (reset_control_deassert(core->reset))
+				dev_warn(cdev,
+					 "local-reset deassert back failed\n");
+		}
+	}
+
+	kproc->rproc->state = RPROC_SUSPENDED;
+
+out:
+	return ret;
+}
+
+static int k3_r5_rproc_resume(struct k3_r5_rproc *kproc)
+{
+	struct k3_r5_cluster *cluster = kproc->cluster;
+	struct k3_r5_core *core;
+	int ret = 0;
+
+	if (kproc->rproc->state != RPROC_SUSPENDED)
+		goto out;
+
+	if (device_may_wakeup(kproc->dev)) {
+		/* TODO: support rproc as wake-up source */
+		ret = -EBUSY;
+		goto out;
+	}
+
+	list_for_each_entry(core, &cluster->cores, elem) {
+		/*
+		 * In split mode, request only current core.
+		 * Otherwise, request all cores.
+		 */
+		if ((cluster->mode != CLUSTER_MODE_SPLIT) ||
+		    ((cluster->mode == CLUSTER_MODE_SPLIT)
+		     && (core == kproc->core))) {
+			ret = ti_sci_proc_request(core->tsp);
+			if (ret) {
+				dev_err(kproc->dev,
+					"ti_sci_proc_request failed (%d)\n",
+					ret);
+				ret = -EBUSY;
+				goto out;
+			}
+		}
+	}
+
+	ret = k3_r5_rproc_configure_mode(kproc);
+	if (ret < 0) {
+		ret = -EBUSY;
+		goto out;
+	}
+
+	/*
+	 * ret > 0 for IPC-only mode
+	 * ret == 0 for remote proc mode
+	 */
+	if (ret == 0) {
+		/*
+		 * remote proc looses its configuration when powered off.
+		 * So, we have to configure it again on resume.
+		 */
+		ret = k3_r5_rproc_configure(kproc);
+		if (ret < 0) {
+			dev_err(kproc->dev,
+				"k3_r5_rproc_configure failed (%d)\n", ret);
+			ret = -EBUSY;
+			goto out;
+		}
+	}
+	ret = 0;
+
+	rproc_boot(kproc->rproc);
+out:
+	return ret;
+}
+
+static int k3_r5_cluster_pm_notifier_call(struct notifier_block *bl,
+					  unsigned long state, void *unused)
+{
+	struct k3_r5_cluster *cluster = container_of(bl, struct k3_r5_cluster,
+						     pm_notifier);
+	struct k3_r5_core *core;
+	int ret = 0;
+
+	switch (state) {
+	case PM_HIBERNATION_PREPARE:
+	case PM_RESTORE_PREPARE:
+	case PM_SUSPEND_PREPARE:
+		/* core1 should be suspended before core0 */
+		list_for_each_entry_reverse(core, &cluster->cores, elem) {
+			/*
+			 * In LOCKSTEP mode, rproc is allocated only for
+			 * core0
+			 */
+			if (core->rproc)
+				ret = k3_r5_rproc_suspend(core->rproc->priv);
+		}
+		break;
+	case PM_POST_HIBERNATION:
+	case PM_POST_RESTORE:
+	case PM_POST_SUSPEND:
+		/* core0 should be started before core1 */
+		list_for_each_entry(core, &cluster->cores, elem) {
+			/*
+			 * In LOCKSTEP mode, rproc is allocated only for
+			 * core0
+			 */
+			if (core->rproc)
+				ret = k3_r5_rproc_resume(core->rproc->priv);
+		}
+		break;
+	}
+	return ret;
+}
+
 static int k3_r5_cluster_rproc_init(struct platform_device *pdev)
 {
 	struct k3_r5_cluster *cluster = platform_get_drvdata(pdev);
@@ -1317,6 +1493,9 @@ init_rmem:
 		}
 	}
 
+	cluster->pm_notifier.notifier_call = k3_r5_cluster_pm_notifier_call;
+	register_pm_notifier(&cluster->pm_notifier);
+
 	return 0;
 
 err_split:
@@ -1380,6 +1559,7 @@ static void k3_r5_cluster_rproc_exit(void *data)
 
 		k3_r5_reserved_mem_exit(kproc);
 	}
+	unregister_pm_notifier(&cluster->pm_notifier);
 }
 
 static int k3_r5_core_of_get_internal_memories(struct platform_device *pdev,

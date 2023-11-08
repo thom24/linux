@@ -8,7 +8,7 @@
 &cbass_mcu_wakeup {
 	sms: system-controller@44083000 {
 		bootph-all;
-		compatible = "ti,k2g-sci";
+		compatible = "ti,j7200-sci", "ti,k2g-sci";
 		ti,host-id = <12>;
 
 		mbox-names = "rx", "tx";

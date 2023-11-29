@@ -40,6 +40,8 @@ properties:
       - description: System controller on TI AM654 SoC
         items:
           - const: ti,am654-sci
+      - description: System controller on TI J7200 SOC
+          - const: ti,j7200-sci
 
   reg-names:
     description: |

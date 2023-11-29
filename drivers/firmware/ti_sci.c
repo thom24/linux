@@ -80,6 +80,8 @@ struct ti_sci_xfers_info {
  *		  simultaneously in the system
  * @max_msg_size: Maximum size of data per message that can be handled.
  * @restore_irqs: Set to true if allocated irqs shall be restored at resume
+ * @lpm_region: Set to true if a reserved memory region is needed for suspend to
+ *		ram
  */
 struct ti_sci_desc {
 	u8 default_host_id;
@@ -87,6 +89,7 @@ struct ti_sci_desc {
 	int max_msgs;
 	int max_msg_size;
 	bool restore_irqs;
+	bool lpm_region;
 };
 
 /**
@@ -3757,12 +3760,33 @@ static int ti_sci_prepare_system_suspend(struct ti_sci_info *info)
 	}
 }
 
+static bool ti_sci_check_lpm_region(void)
+{
+	struct device_node *parent, *node;
+
+	parent = of_find_node_by_path("/reserved-memory");
+	for_each_child_of_node(parent, node) {
+		if (of_node_name_eq(node, "lpm-memory"))
+			return true;
+	}
+
+	return false;
+}
+
 static int __maybe_unused ti_sci_suspend(struct device *dev)
 {
+	const struct ti_sci_desc *desc = device_get_match_data(dev);
 	struct ti_sci_info *info = dev_get_drvdata(dev);
 	struct device *cpu_dev, *cpu_dev_max = NULL;
 	s32 val, cpu_lat = 0;
 	int i, ret;
+
+
+	if (pm_suspend_target_state == PM_SUSPEND_MEM &&
+	    desc->lpm_region && !ti_sci_check_lpm_region()) {
+		dev_err(dev, "lpm region is required for suspend to ram but is not provided\n");
+		return -EINVAL;
+	}
 
 	if (info->fw_caps & MSG_FLAG_CAPS_LPM_DM_MANAGED) {
 		for_each_possible_cpu(i) {
@@ -3887,6 +3911,7 @@ static const struct ti_sci_desc ti_sci_pmmc_j7200_desc = {
 	.max_msgs = 20,
 	.max_msg_size = 64,
 	.restore_irqs = true,
+	.lpm_region = true,
 };
 
 static const struct of_device_id ti_sci_of_match[] = {
@@ -4012,6 +4037,11 @@ static int ti_sci_probe(struct platform_device *pdev)
 		dev_err(dev, "reboot registration fail(%d)\n", ret);
 		goto out;
 	}
+
+#ifdef CONFIG_PM_SLEEP
+	if (desc->lpm_region && !ti_sci_check_lpm_region())
+		dev_warn(dev, "lpm region is required for suspend to ram but is not provided\n");
+#endif
 
 	dev_info(dev, "ABI: %d.%d (firmware rev 0x%04x '%s')\n",
 		 info->handle.version.abi_major, info->handle.version.abi_minor,

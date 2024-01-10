@@ -1075,7 +1075,7 @@ static int wiz_clock_register(struct wiz *wiz)
 	return ret;
 }
 
-static int wiz_clock_init(struct wiz *wiz, struct device_node *node)
+static int wiz_clock_init(struct wiz *wiz, struct device_node *node, bool probe)
 {
 	const struct wiz_clk_mux_sel *clk_mux_sel = wiz->clk_mux_sel;
 	struct device *dev = wiz->dev;
@@ -1086,14 +1086,36 @@ static int wiz_clock_init(struct wiz *wiz, struct device_node *node)
 	int ret;
 	int i;
 
-	clk = devm_clk_get(dev, "core_ref_clk");
-	if (IS_ERR(clk)) {
-		dev_err(dev, "core_ref_clk clock not found\n");
-		ret = PTR_ERR(clk);
-		return ret;
-	}
-	wiz->input_clks[WIZ_CORE_REFCLK] = clk;
+	if (probe) {
+		clk = devm_clk_get(dev, "core_ref_clk");
+		if (IS_ERR(clk)) {
+			dev_err(dev, "core_ref_clk clock not found\n");
+			ret = PTR_ERR(clk);
+			return ret;
+		}
+		wiz->input_clks[WIZ_CORE_REFCLK] = clk;
 
+		if (wiz->data->pma_cmn_refclk1_int_mode) {
+			clk = devm_clk_get(dev, "core_ref1_clk");
+			if (IS_ERR(clk)) {
+				dev_err(dev, "core_ref1_clk clock not found\n");
+				ret = PTR_ERR(clk);
+				return ret;
+			}
+			wiz->input_clks[WIZ_CORE_REFCLK1] = clk;
+		}
+
+		clk = devm_clk_get(dev, "ext_ref_clk");
+		if (IS_ERR(clk)) {
+			dev_err(dev, "ext_ref_clk clock not found\n");
+			ret = PTR_ERR(clk);
+			return ret;
+		}
+		wiz->input_clks[WIZ_EXT_REFCLK] = clk;
+	}
+
+
+	clk = wiz->input_clks[WIZ_CORE_REFCLK];
 	rate = clk_get_rate(clk);
 	if (rate >= 100000000)
 		regmap_field_write(wiz->pma_cmn_refclk_int_mode, 0x1);
@@ -1120,14 +1142,7 @@ static int wiz_clock_init(struct wiz *wiz, struct device_node *node)
 	}
 
 	if (wiz->data->pma_cmn_refclk1_int_mode) {
-		clk = devm_clk_get(dev, "core_ref1_clk");
-		if (IS_ERR(clk)) {
-			dev_err(dev, "core_ref1_clk clock not found\n");
-			ret = PTR_ERR(clk);
-			return ret;
-		}
-		wiz->input_clks[WIZ_CORE_REFCLK1] = clk;
-
+		clk = wiz->input_clks[WIZ_CORE_REFCLK1];
 		rate = clk_get_rate(clk);
 		if (rate >= 100000000)
 			regmap_field_write(wiz->pma_cmn_refclk1_int_mode, 0x1);
@@ -1135,19 +1150,16 @@ static int wiz_clock_init(struct wiz *wiz, struct device_node *node)
 			regmap_field_write(wiz->pma_cmn_refclk1_int_mode, 0x3);
 	}
 
-	clk = devm_clk_get(dev, "ext_ref_clk");
-	if (IS_ERR(clk)) {
-		dev_err(dev, "ext_ref_clk clock not found\n");
-		ret = PTR_ERR(clk);
-		return ret;
-	}
-	wiz->input_clks[WIZ_EXT_REFCLK] = clk;
-
+	clk = wiz->input_clks[WIZ_EXT_REFCLK];
 	rate = clk_get_rate(clk);
 	if (rate >= 100000000)
 		regmap_field_write(wiz->pma_cmn_refclk_mode, 0x0);
 	else
 		regmap_field_write(wiz->pma_cmn_refclk_mode, 0x2);
+
+	/* What follows is about registering clocks. */
+	if (!probe)
+		return 0;
 
 	switch (wiz->type) {
 	case AM64_WIZ_10G:
@@ -1590,7 +1602,7 @@ static int wiz_probe(struct platform_device *pdev)
 		goto err_get_sync;
 	}
 
-	ret = wiz_clock_init(wiz, node);
+	ret = wiz_clock_init(wiz, node, true);
 	if (ret < 0) {
 		dev_warn(dev, "Failed to initialize clocks\n");
 		goto err_get_sync;

@@ -1694,11 +1694,7 @@ static void pcs_restore_context(struct pcs_device *pcs)
 static int pinctrl_single_suspend(struct platform_device *pdev,
 					pm_message_t state)
 {
-	struct pcs_device *pcs;
-
-	pcs = platform_get_drvdata(pdev);
-	if (!pcs)
-		return -EINVAL;
+	struct pcs_device *pcs = platform_get_drvdata(pdev);
 
 	if (pcs->flags & PCS_CONTEXT_LOSS_OFF) {
 		int ret;
@@ -1713,11 +1709,7 @@ static int pinctrl_single_suspend(struct platform_device *pdev,
 
 static int pinctrl_single_resume(struct platform_device *pdev)
 {
-	struct pcs_device *pcs;
-
-	pcs = platform_get_drvdata(pdev);
-	if (!pcs)
-		return -EINVAL;
+	struct pcs_device *pcs = platform_get_drvdata(pdev);
 
 	if (pcs->flags & PCS_CONTEXT_LOSS_OFF)
 		pcs_restore_context(pcs);

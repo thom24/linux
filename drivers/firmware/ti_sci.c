@@ -3537,86 +3537,6 @@ static int tisci_reboot_handler(struct notifier_block *nb, unsigned long mode,
 	return NOTIFY_BAD;
 }
 
-static int ti_sci_prepare_system_suspend(struct ti_sci_info *info)
-{
-#if IS_ENABLED(CONFIG_SUSPEND)
-	u8 mode, unused;
-	u8 mcu_state = 0;
-
-	/*
-	 * Dev ID 9 is AM62X_DEV_MCU_M4FSS0_CORE0. Check state to determine
-	 * MCU only or deep sleep mode
-	 */
-	ti_sci_get_device_state(&info->handle, AM62X_DEV_MCU_M4FSS0_CORE0_DEV_ID,
-				NULL, NULL, &mcu_state, &unused);
-
-	/* Map and validate the target Linux suspend state to TISCI LPM. */
-	switch (pm_suspend_target_state) {
-	case PM_SUSPEND_MEM:
-		/* S2MEM is not supported by the firmware. */
-		if (!(info->fw_caps & MSG_FLAG_CAPS_LPM_DEEP_SLEEP))
-			return 0;
-
-		mode = mcu_state ? TISCI_MSG_VALUE_SLEEP_MODE_MCU_ONLY
-			: TISCI_MSG_VALUE_SLEEP_MODE_DEEP_SLEEP;
-
-		break;
-	default:
-		/*
-		 * Do not fail if we don't have action to take for a
-		 * specific suspend mode.
-		 */
-		return 0;
-	}
-
-	return ti_sci_cmd_prepare_sleep(&info->handle, mode,
-					(u32)(info->ctx_mem_addr & 0xffffffff),
-					(u32)((u64)info->ctx_mem_addr >> 32), 0);
-#else
-	return 0;
-#endif
-}
-
-static int ti_sci_suspend(struct device *dev)
-{
-	struct ti_sci_info *info = dev_get_drvdata(dev);
-	int ret;
-
-	ret = ti_sci_cmd_set_io_isolation(&info->handle, TISCI_MSG_VALUE_IO_ENABLE);
-	if (ret)
-		return ret;
-	dev_dbg(dev, "%s: set isolation: %d\n", __func__, ret);
-
-	ret = ti_sci_prepare_system_suspend(info);
-	if (ret)
-		return ret;
-
-	return 0;
-}
-
-static int ti_sci_resume(struct device *dev)
-{
-	struct ti_sci_info *info = dev_get_drvdata(dev);
-	u32 source;
-	u64 time;
-	int ret = 0;
-
-	ret = ti_sci_cmd_set_io_isolation(&info->handle, TISCI_MSG_VALUE_IO_DISABLE);
-	if (ret)
-		return ret;
-	dev_dbg(dev, "%s: disable isolation: %d\n", __func__, ret);
-
-	ti_sci_msg_cmd_lpm_wake_reason(&info->handle, &source, &time);
-	dev_info(dev, "%s: wakeup source: 0x%X\n", __func__, source);
-
-	return 0;
-}
-
-static const struct dev_pm_ops ti_sci_pm_ops = {
-	.suspend_noirq = ti_sci_suspend,
-	.resume_noirq = ti_sci_resume,
-};
-
 /* Does not return if successful */
 static int tisci_enter_partial_io(struct ti_sci_info *info)
 {
@@ -3936,7 +3856,6 @@ static struct platform_driver ti_sci_driver = {
 		   .name = "ti-sci",
 		   .of_match_table = of_match_ptr(ti_sci_of_match),
 		   .suppress_bind_attrs = true,
-		   .pm = &ti_sci_pm_ops,
 	},
 };
 module_platform_driver(ti_sci_driver);

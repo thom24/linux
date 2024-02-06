@@ -6,6 +6,7 @@
  * Author: Kishon Vijay Abraham I <kishon@ti.com>
  */
 
+#include <linux/clk-provider.h>
 #include <linux/clk.h>
 #include <linux/gpio/consumer.h>
 #include <linux/delay.h>
@@ -14,9 +15,12 @@
 #include <linux/regmap.h>
 #include <linux/of_irq.h>
 #include <linux/irqchip/chained_irq.h>
+#include <linux/container_of.h>
 
 #include "pcie-cadence.h"
 #include "pci-j721e.h"
+
+#define cdns_pcie_to_rc(p) container_of(p, struct cdns_pcie_rc, pcie)
 
 #define CTRL_MMR_LOCK2_MASK		0xFFFFFFFF
 #define CTRL_MMR_LOCK2_KICK0_UNLOCK_VAL	0x68EF3490
@@ -438,6 +442,77 @@ static int j721e_pcie_remove(struct platform_device *pdev)
 	return 0;
 }
 
+
+static int j721e_pcie_suspend_noirq(struct device *dev)
+{
+	struct j721e_pcie *pcie = dev_get_drvdata(dev);
+
+	gpiod_set_value_cansleep(pcie->gpiod, 0);
+	clk_disable_unprepare(pcie->refclk);
+	cdns_pcie_disable_phy(pcie->cdns_pcie);
+
+	return 0;
+}
+
+static int j721e_pcie_resume_noirq(struct device *dev)
+{
+	struct j721e_pcie *pcie = dev_get_drvdata(dev);
+	struct cdns_pcie *cdns_pcie = pcie->cdns_pcie;
+	struct cdns_pcie_rc *rc = cdns_pcie_to_rc(cdns_pcie);
+	int ret;
+
+	ret = j721e_pcie_ctrl_init(pcie);
+	if (ret < 0) {
+		dev_err(dev, "j721e_pcie_ctrl_init failed\n");
+		return ret;
+	}
+
+	j721e_pcie_config_link_irq(pcie);
+
+	/*
+	 * This is not called explicitly in the probe, it is called by
+	 * cdns_pcie_init_phy.
+	 */
+	ret = cdns_pcie_enable_phy(pcie->cdns_pcie);
+	if (ret < 0) {
+		dev_err(dev, "cdns_pcie_enable_phy failed\n");
+		return -ENODEV;
+	}
+
+	ret = clk_prepare_enable(pcie->refclk);
+	if (ret < 0) {
+		dev_err(dev, "clk_prepare_enable failed\n");
+		return -ENODEV;
+	}
+
+	/*
+	 * "Power Sequencing and Reset Signal Timings" table in
+	 * PCI EXPRESS CARD ELECTROMECHANICAL SPECIFICATION, REV. 3.0
+	 * indicates PERST# should be deasserted after minimum of 100us
+	 * once REFCLK is stable. The REFCLK to the connector in RC
+	 * mode is selected while enabling the PHY. So deassert PERST#
+	 * after 100 us.
+	 */
+	if (pcie->gpiod) {
+		usleep_range(100, 200);
+		printk("############## !!!!!! %s: %d\n", __func__, __LINE__);
+		gpiod_set_value_cansleep(pcie->gpiod, 1);
+	}
+
+	ret = cdns_pcie_host_setup(rc, false);
+	if (ret < 0) {
+		clk_disable_unprepare(pcie->refclk);
+		return ret;
+	}
+
+	return 0;
+}
+
+static const struct dev_pm_ops j721e_pcie_pm_ops = {
+	SET_NOIRQ_SYSTEM_SLEEP_PM_OPS(j721e_pcie_suspend_noirq,
+				      j721e_pcie_resume_noirq)
+};
+
 static struct platform_driver j721e_pcie_host_driver = {
 	.probe  = j721e_pcie_probe,
 	.remove = j721e_pcie_remove,
@@ -445,6 +520,7 @@ static struct platform_driver j721e_pcie_host_driver = {
 		.name	= "j721e-pcie-host",
 		.of_match_table = of_j721e_pcie_host_match,
 		.suppress_bind_attrs = true,
+		.pm = pm_sleep_ptr(&j721e_pcie_pm_ops),
 	},
 };
 module_platform_driver(j721e_pcie_host_driver);

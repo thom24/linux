@@ -31,7 +31,7 @@ static irqreturn_t j721e_pcie_link_irq_handler(int irq, void *priv)
 	return IRQ_HANDLED;
 }
 
-static void j721e_pcie_config_link_irq(struct j721e_pcie *pcie)
+void j721e_pcie_config_link_irq(struct j721e_pcie *pcie)
 {
 	u32 reg;
 
@@ -39,6 +39,7 @@ static void j721e_pcie_config_link_irq(struct j721e_pcie *pcie)
 	reg |= pcie->linkdown_irq_regfield;
 	j721e_pcie_intd_writel(pcie, ENABLE_REG_SYS_2, reg);
 }
+EXPORT_SYMBOL_GPL(j721e_pcie_config_link_irq);
 
 void j721e_pcie_remove_link_irq(struct j721e_pcie *pcie)
 {
@@ -152,7 +153,7 @@ static int j721e_pcie_set_lane_count(struct j721e_pcie *pcie,
 	return ret;
 }
 
-static int j721e_pcie_ctrl_init(struct j721e_pcie *pcie)
+int j721e_pcie_ctrl_init(struct j721e_pcie *pcie)
 {
 	struct device *dev = pcie->cdns_pcie->dev;
 	struct device_node *node = dev->of_node;
@@ -193,6 +194,7 @@ static int j721e_pcie_ctrl_init(struct j721e_pcie *pcie)
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(j721e_pcie_ctrl_init);
 
 static int j721e_pcie_setup_link_interrupts(struct j721e_pcie *pcie)
 {

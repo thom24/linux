@@ -106,5 +106,7 @@ extern const struct cdns_pcie_ops j721e_pcie_ops;
 int j721e_pcie_common_init(struct j721e_pcie *pcie);
 void j721e_pcie_remove_link_irq(struct j721e_pcie *pcie);
 void j721e_disable_common_init(struct device *dev);
+int j721e_pcie_ctrl_init(struct j721e_pcie *pcie);
+void j721e_pcie_config_link_irq(struct j721e_pcie *pcie);
 
 #endif /* _PCIE_J721E_H */

@@ -521,7 +521,7 @@ static inline bool cdns_pcie_link_up(struct cdns_pcie *pcie)
 }
 
 #if IS_ENABLED(CONFIG_PCIE_CADENCE_HOST)
-int cdns_pcie_host_setup(struct cdns_pcie_rc *rc);
+int cdns_pcie_host_setup(struct cdns_pcie_rc *rc, bool probe);
 int cdns_pcie_host_remove_setup(struct cdns_pcie_rc *rc);
 void __iomem *cdns_pci_map_bus(struct pci_bus *bus, unsigned int devfn,
 			       int where);

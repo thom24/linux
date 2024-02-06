@@ -508,14 +508,14 @@ static int cdns_pcie_host_init(struct device *dev,
 	return cdns_pcie_host_init_address_translation(rc);
 }
 
-int cdns_pcie_host_setup(struct cdns_pcie_rc *rc)
+int cdns_pcie_host_setup(struct cdns_pcie_rc *rc, bool probe)
 {
 	struct device *dev = rc->pcie.dev;
 	struct platform_device *pdev = to_platform_device(dev);
 	struct device_node *np = dev->of_node;
+	struct cdns_pcie *pcie = &rc->pcie;
 	struct pci_host_bridge *bridge;
 	enum cdns_pcie_rp_bar bar;
-	struct cdns_pcie *pcie;
 	struct resource *res;
 	int ret;
 
@@ -524,25 +524,28 @@ int cdns_pcie_host_setup(struct cdns_pcie_rc *rc)
 		return -ENOMEM;
 
 	pcie = &rc->pcie;
-	pcie->is_rc = true;
 
-	rc->vendor_id = 0xffff;
-	of_property_read_u32(np, "vendor-id", &rc->vendor_id);
+	if (probe) {
+		pcie->is_rc = true;
 
-	rc->device_id = 0xffff;
-	of_property_read_u32(np, "device-id", &rc->device_id);
+		rc->vendor_id = 0xffff;
+		of_property_read_u32(np, "vendor-id", &rc->vendor_id);
 
-	pcie->reg_base = devm_platform_ioremap_resource_byname(pdev, "reg");
-	if (IS_ERR(pcie->reg_base)) {
-		dev_err(dev, "missing \"reg\"\n");
-		return PTR_ERR(pcie->reg_base);
+		rc->device_id = 0xffff;
+		of_property_read_u32(np, "device-id", &rc->device_id);
+
+		pcie->reg_base = devm_platform_ioremap_resource_byname(pdev, "reg");
+		if (IS_ERR(pcie->reg_base)) {
+			dev_err(dev, "missing \"reg\"\n");
+			return PTR_ERR(pcie->reg_base);
+		}
+
+		res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "cfg");
+		rc->cfg_base = devm_pci_remap_cfg_resource(dev, res);
+		if (IS_ERR(rc->cfg_base))
+			return PTR_ERR(rc->cfg_base);
+		rc->cfg_res = res;
 	}
-
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "cfg");
-	rc->cfg_base = devm_pci_remap_cfg_resource(dev, res);
-	if (IS_ERR(rc->cfg_base))
-		return PTR_ERR(rc->cfg_base);
-	rc->cfg_res = res;
 
 	if (rc->quirk_detect_quiet_flag)
 		cdns_pcie_detect_quiet_min_delay_set(&rc->pcie);
@@ -566,13 +569,14 @@ int cdns_pcie_host_setup(struct cdns_pcie_rc *rc)
 	if (ret)
 		return ret;
 
-	if (!bridge->ops)
-		bridge->ops = &cdns_pcie_host_ops;
+	if (probe) {
+		if (!bridge->ops)
+			bridge->ops = &cdns_pcie_host_ops;
 
-	ret = pci_host_probe(bridge);
-	if (ret < 0)
-		goto err_init;
-
+		ret = pci_host_probe(bridge);
+		if (ret < 0)
+			goto err_init;
+	}
 	return 0;
 
  err_init:

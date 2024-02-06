@@ -91,7 +91,7 @@ static int cdns_plat_pcie_probe(struct platform_device *pdev)
 			goto err_get_sync;
 		}
 
-		ret = cdns_pcie_host_setup(rc);
+		ret = cdns_pcie_host_setup(rc, true);
 		if (ret)
 			goto err_init;
 	} else {

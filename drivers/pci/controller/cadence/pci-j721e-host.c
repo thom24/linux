@@ -401,7 +401,7 @@ static int j721e_pcie_probe(struct platform_device *pdev)
 		gpiod_set_value_cansleep(gpiod, 1);
 	}
 
-	ret = cdns_pcie_host_setup(rc);
+	ret = cdns_pcie_host_setup(rc, true);
 	if (ret < 0) {
 		clk_disable_unprepare(pcie->refclk);
 		goto err_pcie_setup;

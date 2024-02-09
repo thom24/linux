@@ -272,7 +272,6 @@
 				st,bank-ioport = <11>;
 				status = "disabled";
 			};
-
 		};
 	};
 };

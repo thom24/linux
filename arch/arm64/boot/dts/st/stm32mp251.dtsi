@@ -1679,6 +1679,8 @@
 					#io-channel-cells = <1>;
 					#address-cells = <1>;
 					#size-cells = <0>;
+					nvmem-cells = <&vrefint>;
+					nvmem-cell-names = "vrefint";
 					status = "disabled";
 					channel@14 {
 						reg = <14>;
@@ -1696,6 +1698,8 @@
 					#io-channel-cells = <1>;
 					#address-cells = <1>;
 					#size-cells = <0>;
+					nvmem-cells = <&vrefint>;
+					nvmem-cell-names = "vrefint";
 					status = "disabled";
 					channel@14 {
 						reg = <14>;
@@ -1884,6 +1888,8 @@
 					#io-channel-cells = <1>;
 					#address-cells = <1>;
 					#size-cells = <0>;
+					nvmem-cells = <&vrefint>;
+					nvmem-cell-names = "vrefint";
 					status = "disabled";
 					channel@14 {
 						reg = <14>;
@@ -2347,6 +2353,10 @@
 
 			part_number_otp@24 {
 				reg = <0x24 0x4>;
+			};
+
+			vrefint: vrefin-cal@1b8 {
+				reg = <0x1b8 0x2>;
 			};
 
 			package_otp@1e8 {

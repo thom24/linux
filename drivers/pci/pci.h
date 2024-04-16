@@ -16,6 +16,9 @@
 /* Power stable to PERST# inactive from PCIe card Electromechanical Spec */
 #define PCIE_T_PVPERL_MS		100
 
+/* REFCLK stable before PERST# inactive from PCIe card Electromechanical Spec */
+#define PCIE_T_PERST_CLK_US		100
+
 /*
  * End of conventional reset (PERST# de-asserted) to first configuration
  * request (device able to respond with a "Request Retry Status" completion),

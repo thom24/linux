@@ -3078,26 +3078,6 @@ static void cdns_torrent_phy_remove(struct platform_device *pdev)
 	cdns_torrent_clk_cleanup(cdns_phy);
 }
 
-/* SGMII and QSGMII link configuration */
-static struct cdns_reg_pairs sgmii_qsgmii_link_cmn_regs[] = {
-	{0x0002, PHY_PLL_CFG}
-};
-
-static struct cdns_reg_pairs sgmii_qsgmii_xcvr_diag_ln_regs[] = {
-	{0x0003, XCVR_DIAG_HSCLK_DIV},
-	{0x0113, XCVR_DIAG_PLLDRC_CTRL}
-};
-
-static struct cdns_torrent_vals sgmii_qsgmii_link_cmn_vals = {
-	.reg_pairs = sgmii_qsgmii_link_cmn_regs,
-	.num_regs = ARRAY_SIZE(sgmii_qsgmii_link_cmn_regs),
-};
-
-static struct cdns_torrent_vals sgmii_qsgmii_xcvr_diag_ln_vals = {
-	.reg_pairs = sgmii_qsgmii_xcvr_diag_ln_regs,
-	.num_regs = ARRAY_SIZE(sgmii_qsgmii_xcvr_diag_ln_regs),
-};
-
 static int cdns_torrent_phy_suspend_noirq(struct device *dev)
 {
 	struct cdns_torrent_phy *cdns_phy = dev_get_drvdata(dev);
@@ -3153,6 +3133,26 @@ put_lnk_rst:
 static DEFINE_NOIRQ_DEV_PM_OPS(cdns_torrent_phy_pm_ops,
 			       cdns_torrent_phy_suspend_noirq,
 			       cdns_torrent_phy_resume_noirq);
+
+/* SGMII and QSGMII link configuration */
+static struct cdns_reg_pairs sgmii_qsgmii_link_cmn_regs[] = {
+	{0x0002, PHY_PLL_CFG}
+};
+
+static struct cdns_reg_pairs sgmii_qsgmii_xcvr_diag_ln_regs[] = {
+	{0x0003, XCVR_DIAG_HSCLK_DIV},
+	{0x0113, XCVR_DIAG_PLLDRC_CTRL}
+};
+
+static struct cdns_torrent_vals sgmii_qsgmii_link_cmn_vals = {
+	.reg_pairs = sgmii_qsgmii_link_cmn_regs,
+	.num_regs = ARRAY_SIZE(sgmii_qsgmii_link_cmn_regs),
+};
+
+static struct cdns_torrent_vals sgmii_qsgmii_xcvr_diag_ln_vals = {
+	.reg_pairs = sgmii_qsgmii_xcvr_diag_ln_regs,
+	.num_regs = ARRAY_SIZE(sgmii_qsgmii_xcvr_diag_ln_regs),
+};
 
 /* USB and DP link configuration */
 static struct cdns_reg_pairs usb_dp_link_cmn_regs[] = {

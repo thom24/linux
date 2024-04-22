@@ -50,7 +50,6 @@ struct ltdc_device {
 	struct clk *pixel_clk;	/* lcd pixel clock */
 	struct clk *bus_clk;	/* bus clock */
 	struct mutex err_lock;	/* protecting error_status */
-	struct mutex act_lock;	/* protecting active status */
 	struct ltdc_caps caps;
 	u32 irq_status;
 	u32 fifo_err;		/* fifo underrun error counter */

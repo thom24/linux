@@ -16,6 +16,7 @@
 #include <linux/of_irq.h>
 #include <linux/platform_device.h>
 #include <linux/soc/ti/ti_sci_protocol.h>
+#include <linux/suspend.h>
 
 /**
  * struct ti_sci_intr_irq_domain - Structure representing a TISCI based
@@ -390,7 +391,13 @@ static int __maybe_unused ti_sci_intr_resume(struct device *dev)
 {
 	struct ti_sci_intr_irq_domain *intr = dev_get_drvdata(dev);
 
-	return ti_sci_intr_restore_irqs(intr);
+	/* Only restore interrupts when coming back from deep sleep (ie IRQ
+	 * config was lost).
+	 */
+	if (pm_suspend_target_state == PM_SUSPEND_MEM)
+		return ti_sci_intr_restore_irqs(intr);
+	else
+		return  0;
 }
 
 static const struct dev_pm_ops ti_sci_intr_dev_pm_ops = {

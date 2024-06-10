@@ -30,6 +30,9 @@
 
 #define CGBC_I2C_FREQ_UNIT_100KHZ	0xC0
 
+#define CGBC_I2C_READ_MAX_LEN	31
+#define CGBC_I2C_WRITE_MAX_LEN	32
+
 enum {
 	STATE_DONE = 0,
 	STATE_INIT,
@@ -68,7 +71,7 @@ static int cgbc_i2c_xfer_msg(struct i2c_adapter *adap)
 	struct i2c_algo_cgbc_data *algo_data = adap->algo_data;
 	struct i2c_msg *msg = algo_data->msg;
 	u8 cmd[4 + 32], status;
-	int ret = 0, len, i;
+	int ret = 0, max_len, len, i;
 
 	if (algo_data->state == STATE_DONE)
 		return ret;
@@ -83,8 +86,9 @@ static int cgbc_i2c_xfer_msg(struct i2c_adapter *adap)
 
 	cmd[3] = i2c_8bit_addr_from_msg(msg);
 
-	if (msg->len - algo_data->pos > 32)
-		len = 32;
+	max_len = (algo_data->state == STATE_READ) ? CGBC_I2C_READ_MAX_LEN : CGBC_I2C_WRITE_MAX_LEN;
+	if (msg->len - algo_data->pos > max_len)
+		len = max_len;
 	else {
 		len = msg->len - algo_data->pos;
 

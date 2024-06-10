@@ -28,6 +28,11 @@
 
 #define CGBC_I2C_LAST_ACK  0x80    /* send ACK on last read byte */
 
+#define CGBC_I2C_FREQ_DEFAULT	100     /* 100 kHz */
+#define CGBC_I2C_FREQ_MAX	6100    /* 6.1 MHz */
+
+#define CGBC_I2C_FREQ_UNIT_1KHZ		0x40
+#define CGBC_I2C_FREQ_UNIT_10KHZ	0x80
 #define CGBC_I2C_FREQ_UNIT_100KHZ	0xC0
 
 #define CGBC_I2C_READ_MAX_LEN	31
@@ -50,6 +55,11 @@ struct i2c_algo_cgbc_data {
 	int			state;
 };
 
+static unsigned int bus_frequency = CGBC_I2C_FREQ_DEFAULT;
+module_param(bus_frequency, uint, 0);
+MODULE_PARM_DESC(bus_frequency, "Set I2C bus frequency in kHz (default="
+				__MODULE_STRING(CGBC_I2C_FREQ_DEFAULT)")");
+
 static int cgbc_i2c_get_status(struct i2c_adapter *adap)
 {
 	struct cgbc_device_data *cgbc = i2c_get_adapdata(adap);
@@ -63,6 +73,35 @@ static int cgbc_i2c_get_status(struct i2c_adapter *adap)
 		return ret;
 
 	return status;
+}
+
+static int cgbc_i2c_set_frequency(struct i2c_adapter *adap, unsigned int bus_frequency)
+{
+	struct cgbc_device_data *cgbc = i2c_get_adapdata(adap);
+	struct i2c_algo_cgbc_data *algo_data = adap->algo_data;
+	u8 cmd[2], data;
+	int ret;
+
+	if (bus_frequency > CGBC_I2C_FREQ_MAX)
+		bus_frequency = CGBC_I2C_FREQ_MAX;
+
+	cmd[0] = CGBC_I2C_CMD_SPEED | algo_data->bus_id;
+
+	if (bus_frequency >= 100)
+		cmd[1] = CGBC_I2C_FREQ_UNIT_100KHZ | (bus_frequency / 100);
+	else if (bus_frequency >= 10)
+		cmd[1] = CGBC_I2C_FREQ_UNIT_10KHZ | (bus_frequency / 10);
+	else
+		cmd[1] = CGBC_I2C_FREQ_UNIT_1KHZ | bus_frequency;
+
+	ret = cgbc_command(cgbc, &cmd[0], sizeof(cmd), &data, 1, NULL);
+	if (ret)
+		return dev_err_probe(&adap->dev, ret, "Failed to initialize I2C bus %s",
+				     adap->name);
+
+	dev_info(&adap->dev, "%s initialized at %dkHz\n", adap->name, 100);
+
+	return 0;
 }
 
 static int cgbc_i2c_xfer_msg(struct i2c_adapter *adap)
@@ -208,25 +247,18 @@ static struct i2c_adapter cgbc_i2c_adapter[2] = {
 static int cgbc_i2c_probe(struct platform_device *pdev)
 {
 	struct i2c_adapter *adap = &cgbc_i2c_adapter[pdev->id];
-	struct i2c_algo_cgbc_data *algo_data = adap->algo_data;
 	struct device *dev = &pdev->dev;
 	struct cgbc_device_data *cgbc = dev_get_drvdata(dev->parent);
-	u8 cmd[2], data, status;
 	int ret;
 
 	adap->dev.parent = dev;
 
 	i2c_set_adapdata(adap, cgbc);
 
-	cmd[0] = CGBC_I2C_CMD_SPEED | 0;
-	cmd[1] = CGBC_I2C_FREQ_UNIT_100KHZ | algo_data->bus_id;
-
-	ret = cgbc_command(cgbc, &cmd[0], 2, &data, 1, &status);
+	ret = cgbc_i2c_set_frequency(adap, bus_frequency);
 	if (ret)
-		return dev_err_probe(&adap->dev, ret, "Failed to initialize I2C bus %s",
-				     adap->name);
+		return ret;
 
-	dev_info(dev, "%s initialized at %dkHz\n", adap->name, 100);
 	return i2c_add_numbered_adapter(adap);
 }
 

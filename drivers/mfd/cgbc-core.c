@@ -196,18 +196,18 @@ static int cgbc_gen5_command(struct cgbc_device_data *cgbc,
 			checksum ^= data[i];
 		}
 		data_checksum = ioread8(cgbc->io_cmd + CGBC_GEN5_CMD_DATA + ((i + 1) % 4));
-		istatus = istatus & CGBC_MASK_DATA_COUNT;
+		istatus &= CGBC_MASK_DATA_COUNT;
 		break;
 	case CGBC_STATUS_ERROR:
 	case CGBC_STATUS_CMD_READY:
 		data_checksum = ioread8(cgbc->io_cmd + CGBC_GEN5_CMD_DATA + 1);
-		istatus = istatus & CGBC_MASK_ERROR_CODE;
 		if ((istatus & CGBC_MASK_STATUS) == CGBC_STATUS_ERROR)
 			ret = -EIO;
+		istatus = istatus & CGBC_MASK_ERROR_CODE;
 		break;
 	default:
 		data_checksum = ioread8(cgbc->io_cmd + CGBC_GEN5_CMD_DATA + 1);
-		istatus = istatus & CGBC_MASK_ERROR_CODE;
+		istatus &= CGBC_MASK_ERROR_CODE;
 		ret = -EIO;
 		break;
 	}

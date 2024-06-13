@@ -9,6 +9,7 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/i2c.h>
+#include <linux/iopoll.h>
 #include <linux/mfd/cgbc.h>
 
 #define CGBC_I2C_PRIMARY_BUS_ID	0
@@ -113,7 +114,10 @@ static int cgbc_i2c_xfer_msg(struct i2c_adapter *adap)
 	int ret = 0, max_len, len, i;
 
 	if (algo_data->state == STATE_DONE)
-		return ret;
+		return 0;
+
+	if (cgbc_i2c_get_status(adap) != CGBC_I2C_STAT_IDL)
+		return -EBUSY;
 
 	cmd[0] = CGBC_I2C_CMD_START | algo_data->bus_id;
 
@@ -142,9 +146,6 @@ static int cgbc_i2c_xfer_msg(struct i2c_adapter *adap)
 		for (i = 0; i < len; i++)
 			cmd[4 + i] = msg->buf[algo_data->pos + i];
 
-		while (cgbc_i2c_get_status(adap) == CGBC_I2C_STAT_BUSY)
-			;
-
 		ret =  cgbc_command(cgbc, &cmd[0], 4 + len, NULL, 0, &status);
 	} else if (algo_data->state == STATE_READ) {
 		cmd[1] |= 1;
@@ -154,18 +155,23 @@ static int cgbc_i2c_xfer_msg(struct i2c_adapter *adap)
 		else
 			cmd[2] = len | CGBC_I2C_LAST_ACK;
 
-		while (cgbc_i2c_get_status(adap) == CGBC_I2C_STAT_BUSY)
-			;
-
 		ret = cgbc_command(cgbc, &cmd[0], 4, NULL, 0, &status);
-		if (ret)
+		if (ret) {
+			algo_data->state = STATE_ERROR;
 			goto end;
+		}
+
+		read_poll_timeout(cgbc_i2c_get_status, ret, ret != CGBC_I2C_STAT_BUSY,
+				  0, 100 * USEC_PER_MSEC, 0, adap);
+		if (ret) {
+			algo_data->state = STATE_ERROR;
+			goto end;
+		}
 
 		cmd[0] = CGBC_I2C_CMD_DATA | algo_data->bus_id;
-		while (cgbc_i2c_get_status(adap) == CGBC_I2C_STAT_BUSY)
-			;
-
 		ret = cgbc_command(cgbc, &cmd[0], 1, msg->buf + algo_data->pos, len, &status);
+		if (ret)
+			algo_data->state = STATE_ERROR;
 	}
 
 	if (!ret && (algo_data->state == STATE_WRITE || algo_data->state == STATE_READ)) {

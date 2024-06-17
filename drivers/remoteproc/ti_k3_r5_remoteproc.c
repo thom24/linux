@@ -21,6 +21,7 @@
 #include <linux/pm_runtime.h>
 #include <linux/remoteproc.h>
 #include <linux/suspend.h>
+#include <linux/iopoll.h>
 #include <linux/reset.h>
 #include <linux/slab.h>
 
@@ -172,7 +173,26 @@ struct k3_r5_rproc {
 	struct k3_r5_core *core;
 	struct k3_r5_mem *rmem;
 	int num_rmems;
+	struct completion shut_comp;
 };
+
+/**
+ * is_core_in_wfi - local utility function to check core status
+ * @core: remote core pointer used for checking core status
+ *
+ * This utility function is invoked by the shutdown sequence to ensure
+ * the remote core is in wfi, before asserting a reset.
+ */
+static bool is_core_in_wfi(struct k3_r5_core *core)
+{
+	int ret;
+	u64 boot_vec = 0;
+	u32 cfg = 0, ctrl = 0, stat = 0;
+
+	ret = ti_sci_proc_get_status(core->tsp, &boot_vec, &cfg, &ctrl, &stat);
+
+	return (ret == 0) ? !!(stat & PROC_BOOT_STATUS_FLAG_R5_WFI) : false;
+}
 
 /**
  * k3_r5_rproc_mbox_callback() - inbound mailbox message handler
@@ -212,6 +232,10 @@ static void k3_r5_rproc_mbox_callback(struct mbox_client *client, void *data)
 		break;
 	case RP_MBOX_ECHO_REPLY:
 		dev_info(dev, "received echo reply from %s\n", name);
+		break;
+	case RP_MBOX_SHUTDOWN_ACK:
+		dev_dbg(dev, "received shutdown_ack from %s\n", name);
+		complete(&kproc->shut_comp);
 		break;
 	default:
 		/* silently handle all other valid messages */
@@ -633,6 +657,7 @@ static int k3_r5_rproc_stop(struct rproc *rproc)
 	struct k3_r5_cluster *cluster = kproc->cluster;
 	struct device *dev = kproc->dev;
 	struct k3_r5_core *core1, *core = kproc->core;
+	bool wfi = false;
 	int ret;
 
 
@@ -646,6 +671,25 @@ static int k3_r5_rproc_stop(struct rproc *rproc)
 				__func__);
 			ret = -EPERM;
 			goto out;
+		}
+	}
+
+	/* Send SHUTDOWN message to remote proc */
+	reinit_completion(&kproc->shut_comp);
+	ret = mbox_send_message(kproc->mbox, (void *)RP_MBOX_SHUTDOWN);
+	if (ret < 0) {
+		dev_err(dev, "Sending SHUTDOWN message failed: %d\n", ret);
+	} else {
+		ret = wait_for_completion_timeout(&kproc->shut_comp,
+						  msecs_to_jiffies(5000));
+		if (ret == 0) {
+			dev_err(dev, "timeout waiting SHUTDOWN_ACK message\n");
+		} else {
+			ret = readx_poll_timeout(is_core_in_wfi, core,
+						 wfi, wfi, 200, 2000);
+			if (ret) {
+				dev_err(dev, "timeout waiting for remote proc to be in WFI state\n");
+			}
 		}
 	}
 
@@ -1452,6 +1496,7 @@ static int k3_r5_cluster_rproc_init(struct platform_device *pdev)
 			goto out;
 		}
 
+		init_completion(&kproc->shut_comp);
 init_rmem:
 		k3_r5_adjust_tcm_sizes(kproc);
 

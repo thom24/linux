@@ -1574,7 +1574,7 @@ static int omap_i2c_runtime_resume(struct device *dev)
 	return 0;
 }
 
-static int omap_i2c_suspend(struct device *dev)
+static int __maybe_unused omap_i2c_suspend(struct device *dev)
 {
 	/*
 	 * If the controller is autosuspended, there is no way to wakeup it once
@@ -1587,7 +1587,7 @@ static int omap_i2c_suspend(struct device *dev)
 	return pm_runtime_resume_and_get(dev);
 }
 
-static int omap_i2c_resume(struct device *dev)
+static int __maybe_unused omap_i2c_resume(struct device *dev)
 {
 	pm_runtime_mark_last_busy(dev);
 	pm_runtime_put_autosuspend(dev);

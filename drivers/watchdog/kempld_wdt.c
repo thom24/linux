@@ -333,31 +333,6 @@ static int kempld_wdt_keepalive(struct watchdog_device *wdd)
 	return 0;
 }
 
-static long kempld_wdt_ioctl(struct watchdog_device *wdd, unsigned int cmd,
-				unsigned long arg)
-{
-	void __user *argp = (void __user *)arg;
-	int ret = -ENOIOCTLCMD;
-	int __user *p = argp;
-	int new_value;
-
-	switch (cmd) {
-	case WDIOC_SETPRETIMEOUT:
-		if (get_user(new_value, p))
-			return -EFAULT;
-		ret = kempld_wdt_set_pretimeout(wdd, new_value);
-		if (ret)
-			return ret;
-		ret = kempld_wdt_keepalive(wdd);
-		break;
-	case WDIOC_GETPRETIMEOUT:
-		ret = put_user(wdd->pretimeout, (int __user *)arg);
-		break;
-	}
-
-	return ret;
-}
-
 static int kempld_wdt_probe_stages(struct watchdog_device *wdd)
 {
 	struct kempld_wdt_data *wdt_data = watchdog_get_drvdata(wdd);
@@ -427,7 +402,6 @@ static const struct watchdog_ops kempld_wdt_ops = {
 	.stop		= kempld_wdt_stop,
 	.ping		= kempld_wdt_keepalive,
 	.set_timeout	= kempld_wdt_set_timeout,
-	.ioctl		= kempld_wdt_ioctl,
 };
 
 static int kempld_wdt_probe(struct platform_device *pdev)

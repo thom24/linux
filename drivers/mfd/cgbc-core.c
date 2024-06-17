@@ -379,11 +379,11 @@ static int cgbc_detect_device(struct cgbc_device_data *cgbc)
 }
 
 int cgbc_command(struct cgbc_device_data *cgbc,
-		 u8 *cmd, u8 cmd_size, u8 *data, u8 data_size, u8 *status)
+		 void *cmd, unsigned int cmd_size, void *data, unsigned int data_size, u8 *status)
 {
 	const struct cgbc_platform_data *pdata = dev_get_platdata(cgbc->dev);
 
-	return pdata->command(cgbc, cmd, cmd_size, data, data_size, status);
+	return pdata->command(cgbc, (u8 *)cmd, cmd_size, (u8 *)data, data_size, status);
 }
 EXPORT_SYMBOL_GPL(cgbc_command);
 

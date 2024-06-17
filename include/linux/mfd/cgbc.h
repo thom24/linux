@@ -36,5 +36,5 @@ struct cgbc_platform_data {
 	void	(*close)(struct cgbc_device_data *);
 };
 
-int cgbc_command(struct cgbc_device_data *cgbc, u8 *cmd, u8 cmd_size, u8 *data,
-		 u8 data_size, u8 *status);
+int cgbc_command(struct cgbc_device_data *cgbc, void *cmd, unsigned int cmd_size,
+		 void *data, unsigned int data_size, u8 *status);

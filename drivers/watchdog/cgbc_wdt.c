@@ -12,16 +12,13 @@
 #include <linux/watchdog.h>
 #include <linux/mfd/cgbc.h>
 
-#define CGBC_WDT_DEFAULT_TIMEOUT	30
-#define CGBC_WDT_DEFAULT_PRETIMEOUT	0
-
 #define CGBC_WDT_CMD_TRIGGER	0x27
 #define CGBC_WDT_CMD_INIT	0x28
 #define	CGBC_WDT_DISABLE	0x00
 
 #define CGBC_WDT_MODE_SINGLE_EVENT 0x02
 
-#define DEFAULT_TIMEOUT	30
+#define DEFAULT_TIMEOUT		30
 #define DEFAULT_PRETIMEOUT	0
 
 enum {
@@ -53,15 +50,41 @@ struct cgbc_wdt_data {
 	unsigned int pretimeout_action;
 };
 
+struct cgbc_wdt_cmd_start {
+	u8 cmd;
+	u8 mode;
+	u8 action;
+	u8 pretimeout[3];
+	u8 timeout[3];
+	u8 delay[3];
+} __attribute__((__packed__));
+
 static int cgbc_wdt_start(struct watchdog_device *wdd)
 {
 	struct cgbc_wdt_data *wdt_data = watchdog_get_drvdata(wdd);
 	struct cgbc_device_data *cgbc = wdt_data->cgbc;
-	u8 cmd[15], status;
-	int ret;
+	unsigned int pretimeout = (wdd->pretimeout > 0) ? (wdd->timeout - wdd->pretimeout) * 1000 : 0;
+	unsigned int timeout = wdd->timeout * 1000;
 
-	cmd[0]	= CGBC_WDT_CMD_INIT;
-	cmd[1]	= CGBC_WDT_MODE_SINGLE_EVENT;
+	struct cgbc_wdt_cmd_start cmd_start = {
+		.cmd = CGBC_WDT_CMD_INIT,
+		.mode = CGBC_WDT_MODE_SINGLE_EVENT,
+		.action = (pretimeout > 0) ?
+			2 | (wdt_data->pretimeout_action << 2) | (wdt_data->timeout_action << 4) :
+			1 | (wdt_data->timeout_action << 2),
+		.pretimeout[0] = (pretimeout > 0) ? (u8)(pretimeout & 0xFF) : 0,
+		.pretimeout[1] = (pretimeout > 0) ? (u8)((pretimeout & 0xFF00) >> 8) : 0,
+		.pretimeout[2] = (pretimeout > 0) ? (u8)((pretimeout & 0xFF0000) >> 16): 0,
+		.timeout[0] = (u8)(timeout & 0xFF),
+		.timeout[1] = (u8)((timeout & 0xFF00) >> 8),
+		.timeout[2] = (u8)((timeout & 0xFF0000) >> 16),
+		.delay[0] = 0x00,
+		.delay[1] = 0x00,
+		.delay[2] = 0x00,
+	};
+
+/*	cmd[0] = CGBC_WDT_CMD_INIT,
+	cmd[1] = CGBC_WDT_MODE_SINGLE_EVENT,
 	if (wdd->pretimeout > 0) {
 		cmd[2] = 2;
 		cmd[2] |= (wdt_data->pretimeout_action << 2);
@@ -79,43 +102,32 @@ static int cgbc_wdt_start(struct watchdog_device *wdd)
 		cmd[5] = ((wdd->timeout * 1000) & 0xFF0000) >> 16;
 	}
 
-	/* set delay to 0 */
 	cmd[12] = 0x00;
 	cmd[13] = 0x00;
 	cmd[14] = 0x00;
-
-	ret = cgbc_command(cgbc, &cmd[0], 15, NULL, 0, &status);
-	if (ret)
-		return ret;
-
-	return 0;
+*/
+	return cgbc_command(cgbc, &cmd_start, sizeof(cmd_start), NULL, 0, NULL);
 }
 
 static int cgbc_wdt_stop(struct watchdog_device *wdd)
 {
 	struct cgbc_wdt_data *wdt_data = watchdog_get_drvdata(wdd);
 	struct cgbc_device_data *cgbc = wdt_data->cgbc;
-	u8 cmd[2], status;
-	int ret;
+	u8 cmd_stop[] = {
+		[0] = CGBC_WDT_CMD_INIT,
+		[1] = CGBC_WDT_DISABLE,
+	};
 
-	cmd[0] = CGBC_WDT_CMD_INIT;
-	cmd[1] = CGBC_WDT_DISABLE;
-
-	ret = cgbc_command(cgbc, &cmd[0], sizeof(cmd), NULL, 0, NULL);
-	if (ret)
-		return ret;
-
-	return 0;
+	return cgbc_command(cgbc, cmd_stop, sizeof(cmd_stop), NULL, 0, NULL);
 }
 
 static int cgbc_wdt_keepalive(struct watchdog_device *wdd)
 {
 	struct cgbc_wdt_data *wdt_data = watchdog_get_drvdata(wdd);
 	struct cgbc_device_data *cgbc = wdt_data->cgbc;
-	u8 cmd = CGBC_WDT_CMD_TRIGGER;
-	u8 status;
+	u8 cmd_ping = CGBC_WDT_CMD_TRIGGER;
 
-	return cgbc_command(cgbc, &cmd, 1, NULL, 0, &status);
+	return cgbc_command(cgbc, &cmd_ping, sizeof(cmd_ping), NULL, 0, NULL);
 }
 
 static int cgbc_wdt_set_pretimeout(struct watchdog_device *wdd,
@@ -141,7 +153,7 @@ static int cgbc_wdt_set_timeout(struct watchdog_device *wdd,
 	struct cgbc_wdt_data *wdt_data = watchdog_get_drvdata(wdd);
 
 	if (timeout < wdd->timeout) {
-		dev_dbg(wdd->parent, "pretimeout > timeout. Setting to zero\n");
+		dev_dbg(wdd->parent, "pretimeout > timeout. Set pretimeout to zero\n");
 		wdd->pretimeout = 0;
 	}
 	wdd->timeout = timeout;

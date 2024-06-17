@@ -28,12 +28,12 @@ enum {
 	ACTION_BUTTON,
 };
 
-static unsigned int timeout = CGBC_WDT_DEFAULT_TIMEOUT;
+static unsigned int timeout = DEFAULT_TIMEOUT;
 module_param(timeout, uint, 0);
 MODULE_PARM_DESC(timeout,
 		 "Watchdog timeout in seconds. (>=0, default=" __MODULE_STRING(DEFAULT_TIMEOUT) ")");
 
-static unsigned int pretimeout = CGBC_WDT_DEFAULT_PRETIMEOUT;
+static unsigned int pretimeout = DEFAULT_PRETIMEOUT;
 module_param(pretimeout, uint, 0);
 MODULE_PARM_DESC(pretimeout,
 		 "Watchdog pretimeout in seconds. (>=0, default=" __MODULE_STRING(DEFAULT_PRETIMEOUT) ")");

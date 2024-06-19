@@ -173,7 +173,7 @@ struct k3_r5_rproc {
 	struct k3_r5_core *core;
 	struct k3_r5_mem *rmem;
 	int num_rmems;
-	struct completion shut_comp;
+	struct completion shutdown_complete;
 };
 
 /**
@@ -235,7 +235,7 @@ static void k3_r5_rproc_mbox_callback(struct mbox_client *client, void *data)
 		break;
 	case RP_MBOX_SHUTDOWN_ACK:
 		dev_dbg(dev, "received shutdown_ack from %s\n", name);
-		complete(&kproc->shut_comp);
+		complete(&kproc->shutdown_complete);
 		break;
 	default:
 		/* silently handle all other valid messages */
@@ -675,12 +675,12 @@ static int k3_r5_rproc_stop(struct rproc *rproc)
 	}
 
 	/* Send SHUTDOWN message to remote proc */
-	reinit_completion(&kproc->shut_comp);
+	reinit_completion(&kproc->shutdown_complete);
 	ret = mbox_send_message(kproc->mbox, (void *)RP_MBOX_SHUTDOWN);
 	if (ret < 0) {
 		dev_err(dev, "Sending SHUTDOWN message failed: %d\n", ret);
 	} else {
-		ret = wait_for_completion_timeout(&kproc->shut_comp,
+		ret = wait_for_completion_timeout(&kproc->shutdown_complete,
 						  msecs_to_jiffies(5000));
 		if (ret == 0) {
 			dev_err(dev, "timeout waiting SHUTDOWN_ACK message\n");
@@ -1496,7 +1496,7 @@ static int k3_r5_cluster_rproc_init(struct platform_device *pdev)
 			goto out;
 		}
 
-		init_completion(&kproc->shut_comp);
+		init_completion(&kproc->shutdown_complete);
 init_rmem:
 		k3_r5_adjust_tcm_sizes(kproc);
 

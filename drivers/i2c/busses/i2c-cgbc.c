@@ -56,15 +56,6 @@ struct i2c_algo_cgbc_data {
 	int			state;
 };
 
-struct cgbc_i2c_transfer {
-	u8 bus_cmd;
-	u8 write;
-	u8 read;
-	u8 addr;
-#define CGBC_I2C_TRANSFER_HEADER_SIZE	4
-	u8 data[32];
-};
-
 static unsigned int bus_frequency = CGBC_I2C_FREQ_DEFAULT;
 module_param(bus_frequency, uint, 0);
 MODULE_PARM_DESC(bus_frequency, "Set I2C bus frequency in kHz (default="
@@ -78,7 +69,7 @@ static int cgbc_i2c_get_status(struct i2c_adapter *adap)
 	u8 status;
 	int ret;
 
-	ret = cgbc_command(cgbc, &cmd, sizeof(cmd), NULL, 0, &status);
+	ret = cgbc_command(cgbc, &cmd, 1, NULL, 0, &status);
 	if (ret)
 		return ret;
 
@@ -104,12 +95,12 @@ static int cgbc_i2c_set_frequency(struct i2c_adapter *adap, unsigned int bus_fre
 	else
 		cmd[1] = CGBC_I2C_FREQ_UNIT_1KHZ | bus_frequency;
 
-	ret = cgbc_command(cgbc, &cmd, sizeof(cmd), &data, sizeof(data), NULL);
+	ret = cgbc_command(cgbc, &cmd[0], sizeof(cmd), &data, 1, NULL);
 	if (ret)
 		return dev_err_probe(&adap->dev, ret, "Failed to initialize I2C bus %s",
 				     adap->name);
 
-	dev_info(&adap->dev, "%s initialized at %dkHz\n", adap->name, bus_frequency);
+	dev_info(&adap->dev, "%s initialized at %dkHz\n", adap->name, 100);
 
 	return 0;
 }
@@ -119,13 +110,8 @@ static int cgbc_i2c_xfer_msg(struct i2c_adapter *adap)
 	struct cgbc_device_data *cgbc = i2c_get_adapdata(adap);
 	struct i2c_algo_cgbc_data *algo_data = adap->algo_data;
 	struct i2c_msg *msg = algo_data->msg;
+	u8 cmd[4 + 32], status;
 	int ret = 0, max_len, len, i;
-	u8 cmd_data;
-
-	struct cgbc_i2c_transfer xfer = {
-		.bus_cmd = CGBC_I2C_CMD_START | algo_data->bus_id,
-		.addr = i2c_8bit_addr_from_msg(msg),
-	};
 
 	if (algo_data->state == STATE_DONE)
 		return 0;
@@ -133,11 +119,15 @@ static int cgbc_i2c_xfer_msg(struct i2c_adapter *adap)
 	if (cgbc_i2c_get_status(adap) != CGBC_I2C_STAT_IDL)
 		return -EBUSY;
 
+	cmd[0] = CGBC_I2C_CMD_START | algo_data->bus_id;
+
 	if (algo_data->state == STATE_INIT || algo_data->state == STATE_WRITE) {
-		xfer.write = CGBC_I2C_START;
+		cmd[1] = CGBC_I2C_START;
 		algo_data->state = (msg->flags & I2C_M_RD) ? STATE_READ : STATE_WRITE;
 	} else
-		xfer.write = 0x00;
+		cmd[1] = 0x00;
+
+	cmd[3] = i2c_8bit_addr_from_msg(msg);
 
 	max_len = (algo_data->state == STATE_READ) ? CGBC_I2C_READ_MAX_LEN : CGBC_I2C_WRITE_MAX_LEN;
 	if (msg->len - algo_data->pos > max_len)
@@ -146,25 +136,26 @@ static int cgbc_i2c_xfer_msg(struct i2c_adapter *adap)
 		len = msg->len - algo_data->pos;
 
 		if (algo_data->nmsgs == 1)
-			xfer.write |= CGBC_I2C_STOP;
+			cmd[1] |= CGBC_I2C_STOP;
 	}
 
 	if (algo_data->state == STATE_WRITE) {
-		xfer.write |= (1 + len);
-		xfer.read = 0x00;
+		cmd[1] |= (1 + len);
+		cmd[2] = 0x00;
+		cmd[4] = msg->buf[0];
 		for (i = 0; i < len; i++)
-			xfer.data[i] = msg->buf[algo_data->pos + i];
+			cmd[4 + i] = msg->buf[algo_data->pos + i];
 
-		ret =  cgbc_command(cgbc, &xfer, CGBC_I2C_TRANSFER_HEADER_SIZE + len, NULL,
-				    0, NULL);
+		ret =  cgbc_command(cgbc, &cmd[0], 4 + len, NULL, 0, &status);
 	} else if (algo_data->state == STATE_READ) {
-		xfer.write |= 1;
+		cmd[1] |= 1;
 
-		xfer.read = len;
-		if (algo_data->nmsgs > 1 || msg->len - algo_data->pos > max_len)
-			xfer.read |= CGBC_I2C_LAST_ACK;
+		if (algo_data->nmsgs == 1 && msg->len - algo_data->pos <= 32)
+			cmd[2] = len;
+		else
+			cmd[2] = len | CGBC_I2C_LAST_ACK;
 
-		ret = cgbc_command(cgbc, &xfer, CGBC_I2C_TRANSFER_HEADER_SIZE, NULL, 0, NULL);
+		ret = cgbc_command(cgbc, &cmd[0], 4, NULL, 0, &status);
 		if (ret) {
 			algo_data->state = STATE_ERROR;
 			goto end;
@@ -177,9 +168,8 @@ static int cgbc_i2c_xfer_msg(struct i2c_adapter *adap)
 			goto end;
 		}
 
-		cmd_data = CGBC_I2C_CMD_DATA | algo_data->bus_id;
-		ret = cgbc_command(cgbc, &cmd_data, sizeof(cmd_data),
-				   msg->buf + algo_data->pos, len, NULL);
+		cmd[0] = CGBC_I2C_CMD_DATA | algo_data->bus_id;
+		ret = cgbc_command(cgbc, &cmd[0], 1, msg->buf + algo_data->pos, len, &status);
 		if (ret)
 			algo_data->state = STATE_ERROR;
 	}
@@ -228,7 +218,7 @@ static int cgbc_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs, int num
 
 static u32 cgbc_i2c_func(struct i2c_adapter *adap)
 {
-	return I2C_FUNC_I2C | I2C_FUNC_SMBUS_EMUL;
+	return I2C_FUNC_I2C | (I2C_FUNC_SMBUS_EMUL & ~I2C_FUNC_SMBUS_QUICK);
 }
 
 static const struct i2c_algorithm cgbc_i2c_algorithm = {

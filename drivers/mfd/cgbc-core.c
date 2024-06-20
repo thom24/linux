@@ -74,17 +74,20 @@ static u8 cgbc_gen5_session_command(struct cgbc_device_data *cgbc, u8 cmd)
 {
 	u8 ret;
 
-	while (ioread8(cgbc->io_session + CGBC_GEN5_SESSION_CMD) != CGBC_GEN5_SESSION_CMD_IDLE)
+	while (ioread8(cgbc->io_session + CGBC_GEN5_SESSION_CMD) !=
+	       CGBC_GEN5_SESSION_CMD_IDLE)
 		;
 
 	iowrite8(cmd, cgbc->io_session + CGBC_GEN5_SESSION_CMD);
 
-	while (ioread8(cgbc->io_session + CGBC_GEN5_SESSION_CMD) != CGBC_GEN5_SESSION_CMD_IDLE)
+	while (ioread8(cgbc->io_session + CGBC_GEN5_SESSION_CMD) !=
+	       CGBC_GEN5_SESSION_CMD_IDLE)
 		;
 
 	ret = ioread8(cgbc->io_session + CGBC_GEN5_SESSION_DATA);
 
-	iowrite8(CGBC_GEN5_SESSION_STATUS_FREE, cgbc->io_session + CGBC_GEN5_SESSION_STATUS);
+	iowrite8(CGBC_GEN5_SESSION_STATUS_FREE,
+		 cgbc->io_session + CGBC_GEN5_SESSION_STATUS);
 
 	return ret;
 }
@@ -96,14 +99,16 @@ static int cgbc_gen5_session_request(struct cgbc_device_data *cgbc)
 	if (ret)
 		return dev_err_probe(cgbc->dev, ret, "device not found\n");
 
-	cgbc->session = cgbc_gen5_session_command(cgbc, CGBC_GEN5_SESSION_CMD_REQUEST);
+	cgbc->session = cgbc_gen5_session_command(cgbc,
+						  CGBC_GEN5_SESSION_CMD_REQUEST);
 
-	/* the Board Controller sent us a wrong session handle, we cannot communicate
-	 * with it
+	/* the Board Controller sent us a wrong session handle, we cannot
+	 * communicate with it.
 	 */
-	if ((cgbc->session < 0x02) || (cgbc->session > 0xFE)) {
+	if (cgbc->session < 0x02 || cgbc->session > 0xFE) {
 		cgbc->session = 0;
-		return dev_err_probe(cgbc->dev, -ENODEV, "failed to get a valid session handle\n");
+		return dev_err_probe(cgbc->dev, -ENODEV,
+				     "failed to get a valid session handle\n");
 	}
 
 	return 0;
@@ -133,7 +138,8 @@ static void cgbc_gen5_command_unlock(struct cgbc_device_data *cgbc)
 }
 
 static int cgbc_gen5_command(struct cgbc_device_data *cgbc,
-			     u8 *cmd, u8 cmd_size, u8 *data, u8 data_size, u8 *status)
+			     u8 *cmd, u8 cmd_size, u8 *data, u8 data_size,
+			     u8 *status)
 {
 	u8 checksum = 0, data_checksum = 0, val, istatus;
 	int mode_change = -1;
@@ -143,21 +149,25 @@ static int cgbc_gen5_command(struct cgbc_device_data *cgbc,
 	mutex_lock(&cgbc->lock);
 
 	/* request access */
-	ret = read_poll_timeout(cgbc_gen5_command_lock, lock, lock, 0, 100000, false, cgbc);
+	ret = read_poll_timeout(cgbc_gen5_command_lock, lock, lock, 0, 100000,
+				false, cgbc);
 	if (ret)
 		goto out;
 
 	/* wait board controller is ready */
-	ret = read_poll_timeout(ioread8, val, val == CGBC_GEN5_CMD_STROBE, 0, 100000, false,
+	ret = read_poll_timeout(ioread8, val, val == CGBC_GEN5_CMD_STROBE, 0,
+				100000, false,
 				cgbc->io_cmd + CGBC_GEN5_CMD_STROBE);
 	if (ret)
 		goto release;
 
 	/* write command packet */
 	if (cmd_size <= 2) {
-		iowrite8(CGBC_GEN5_CMD_INDEX_CBM_MAN8, cgbc->io_cmd + CGBC_GEN5_CMD_INDEX);
+		iowrite8(CGBC_GEN5_CMD_INDEX_CBM_MAN8,
+			 cgbc->io_cmd + CGBC_GEN5_CMD_INDEX);
 	} else {
-		iowrite8(CGBC_GEN5_CMD_INDEX_CBM_AUTO32, cgbc->io_cmd + CGBC_GEN5_CMD_INDEX);
+		iowrite8(CGBC_GEN5_CMD_INDEX_CBM_AUTO32,
+			 cgbc->io_cmd + CGBC_GEN5_CMD_INDEX);
 		if ((cmd_size % 4) != 0x03)
 			mode_change = (cmd_size & 0xFFFC) - 1;
 	}
@@ -177,30 +187,37 @@ static int cgbc_gen5_command(struct cgbc_device_data *cgbc,
 	iowrite8(cgbc->session, cgbc->io_cmd + CGBC_GEN5_CMD_STROBE);
 
 	/* rewind cmd buffer index */
-	iowrite8(CGBC_GEN5_CMD_INDEX_CBM_AUTO32, cgbc->io_cmd + CGBC_GEN5_CMD_INDEX);
+	iowrite8(CGBC_GEN5_CMD_INDEX_CBM_AUTO32,
+		 cgbc->io_cmd + CGBC_GEN5_CMD_INDEX);
 
 	/* wait command completion */
-	ret = read_poll_timeout(ioread8, val, val == CGBC_GEN5_CMD_STROBE, 0, 100000, false,
+	ret = read_poll_timeout(ioread8, val, val == CGBC_GEN5_CMD_STROBE, 0,
+				100000, false,
 				cgbc->io_cmd + CGBC_GEN5_CMD_STROBE);
 	if (ret)
 		goto release;
 
+	istatus = ioread8(cgbc->io_cmd + CGBC_GEN5_CMD_DATA);
+	checksum = istatus;
+
 	/* check command status */
-	checksum = istatus = ioread8(cgbc->io_cmd + CGBC_GEN5_CMD_DATA);
 	switch (istatus & CGBC_MASK_STATUS) {
 	case CGBC_STATUS_DATA_READY:
 		if (istatus > data_size)
 			istatus = data_size;
 		for (i = 0; i < istatus; i++) {
-			data[i] = ioread8(cgbc->io_cmd + CGBC_GEN5_CMD_DATA + ((i + 1) % 4));
+			data[i] = ioread8(cgbc->io_cmd +
+					  CGBC_GEN5_CMD_DATA + ((i + 1) % 4));
 			checksum ^= data[i];
 		}
-		data_checksum = ioread8(cgbc->io_cmd + CGBC_GEN5_CMD_DATA + ((i + 1) % 4));
+		data_checksum = ioread8(cgbc->io_cmd +
+					CGBC_GEN5_CMD_DATA + ((i + 1) % 4));
 		istatus &= CGBC_MASK_DATA_COUNT;
 		break;
 	case CGBC_STATUS_ERROR:
 	case CGBC_STATUS_CMD_READY:
-		data_checksum = ioread8(cgbc->io_cmd + CGBC_GEN5_CMD_DATA + 1);
+		data_checksum = ioread8(cgbc->io_cmd +
+					CGBC_GEN5_CMD_DATA + 1);
 		if ((istatus & CGBC_MASK_STATUS) == CGBC_STATUS_ERROR)
 			ret = -EIO;
 		istatus = istatus & CGBC_MASK_ERROR_CODE;
@@ -252,7 +269,7 @@ static int cgbc_gen5_map(struct cgbc_device_data *cgbc)
 		return -EINVAL;
 
 	cgbc->io_session = devm_ioport_map(dev, ioport->start,
-					resource_size(ioport));
+					   resource_size(ioport));
 	if (!cgbc->io_session)
 		return -ENOMEM;
 
@@ -340,9 +357,9 @@ static int cgbc_get_info(struct cgbc_device_data *cgbc)
 	cgbc->info.feature = data[0];
 	cgbc->info.major = data[1];
 	cgbc->info.minor = data[2];
-	ret = snprintf(cgbc->info.version, sizeof(cgbc->info.version), "CGBCP%c%c%c",
-		       cgbc->info.feature, cgbc->info.major,
-		       cgbc->info.minor);
+	ret = snprintf(cgbc->info.version, sizeof(cgbc->info.version),
+		       "CGBCP%c%c%c", cgbc->info.feature,
+		       cgbc->info.major, cgbc->info.minor);
 
 	if (ret < 0)
 		return ret;
@@ -379,11 +396,13 @@ static int cgbc_detect_device(struct cgbc_device_data *cgbc)
 }
 
 int cgbc_command(struct cgbc_device_data *cgbc,
-		 void *cmd, unsigned int cmd_size, void *data, unsigned int data_size, u8 *status)
+		 void *cmd, unsigned int cmd_size,
+		 void *data, unsigned int data_size, u8 *status)
 {
 	const struct cgbc_platform_data *pdata = dev_get_platdata(cgbc->dev);
 
-	return pdata->command(cgbc, (u8 *)cmd, cmd_size, (u8 *)data, data_size, status);
+	return pdata->command(cgbc, (u8 *)cmd, cmd_size, (u8 *)data, data_size,
+			      status);
 }
 EXPORT_SYMBOL_GPL(cgbc_command);
 

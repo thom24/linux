@@ -31,17 +31,20 @@ enum {
 static unsigned int timeout = DEFAULT_TIMEOUT;
 module_param(timeout, uint, 0);
 MODULE_PARM_DESC(timeout,
-		 "Watchdog timeout in seconds. (>=0, default=" __MODULE_STRING(DEFAULT_TIMEOUT) ")");
+		 "Watchdog timeout in seconds. (>=0, default="
+		 __MODULE_STRING(DEFAULT_TIMEOUT) ")");
 
 static unsigned int pretimeout = DEFAULT_PRETIMEOUT;
 module_param(pretimeout, uint, 0);
 MODULE_PARM_DESC(pretimeout,
-		 "Watchdog pretimeout in seconds. (>=0, default=" __MODULE_STRING(DEFAULT_PRETIMEOUT) ")");
+		 "Watchdog pretimeout in seconds. (>=0, default="
+		 __MODULE_STRING(DEFAULT_PRETIMEOUT) ")");
 
 static bool nowayout = WATCHDOG_NOWAYOUT;
 module_param(nowayout, bool, 0);
 MODULE_PARM_DESC(nowayout,
-		 "Watchdog cannot be stopped once started (default=" __MODULE_STRING(WATCHDOG_NOWAYOUT) ")");
+		 "Watchdog cannot be stopped once started (default="
+		 __MODULE_STRING(WATCHDOG_NOWAYOUT) ")");
 
 struct cgbc_wdt_data {
 	struct cgbc_device_data	*cgbc;
@@ -57,24 +60,28 @@ struct cgbc_wdt_cmd_start {
 	u8 pretimeout[3];
 	u8 timeout[3];
 	u8 delay[3];
-} __attribute__((__packed__));
+} __packed;
 
 static int cgbc_wdt_start(struct watchdog_device *wdd)
 {
 	struct cgbc_wdt_data *wdt_data = watchdog_get_drvdata(wdd);
 	struct cgbc_device_data *cgbc = wdt_data->cgbc;
-	unsigned int pretimeout = (wdd->pretimeout > 0) ? (wdd->timeout - wdd->pretimeout) * 1000 : 0;
+	unsigned int pretimeout = (wdd->pretimeout > 0) ?
+		(wdd->timeout - wdd->pretimeout) * 1000 : 0;
 	unsigned int timeout = wdd->timeout * 1000;
 
 	struct cgbc_wdt_cmd_start cmd_start = {
 		.cmd = CGBC_WDT_CMD_INIT,
 		.mode = CGBC_WDT_MODE_SINGLE_EVENT,
 		.action = (pretimeout > 0) ?
-			2 | (wdt_data->pretimeout_action << 2) | (wdt_data->timeout_action << 4) :
-			1 | (wdt_data->timeout_action << 2),
+			2 | (u8)(wdt_data->pretimeout_action << 2) |
+			(u8)(wdt_data->timeout_action << 4) :
+			1 | (u8)(wdt_data->timeout_action << 2),
 		.pretimeout[0] = (pretimeout > 0) ? (u8)(pretimeout & 0xFF) : 0,
-		.pretimeout[1] = (pretimeout > 0) ? (u8)((pretimeout & 0xFF00) >> 8) : 0,
-		.pretimeout[2] = (pretimeout > 0) ? (u8)((pretimeout & 0xFF0000) >> 16): 0,
+		.pretimeout[1] = (pretimeout > 0) ?
+			(u8)((pretimeout & 0xFF00) >> 8) : 0,
+		.pretimeout[2] = (pretimeout > 0) ?
+			(u8)((pretimeout & 0xFF0000) >> 16) : 0,
 		.timeout[0] = (u8)(timeout & 0xFF),
 		.timeout[1] = (u8)((timeout & 0xFF00) >> 8),
 		.timeout[2] = (u8)((timeout & 0xFF0000) >> 16),

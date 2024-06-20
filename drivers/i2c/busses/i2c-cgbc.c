@@ -29,12 +29,22 @@
 
 #define CGBC_I2C_LAST_ACK  0x80    /* send ACK on last read byte */
 
+/*
+ * Reference code defines 1kHz as min freq and 6.1MHz as max freq.
+ * But in practice, the board controller limits the frequency to 1MHz, and the
+ * 1kHz is not functionnal (minimal working freq is 50kHz).
+ * So use these values as limits.
+ */
+#define CGBC_I2C_FREQ_MIN	50	/* 50 kHz */
+#define CGBC_I2C_FREQ_MAX	1000    /* 1 MHz */
 #define CGBC_I2C_FREQ_DEFAULT	100     /* 100 kHz */
-#define CGBC_I2C_FREQ_MAX	6100    /* 6.1 MHz */
 
 #define CGBC_I2C_FREQ_UNIT_1KHZ		0x40
 #define CGBC_I2C_FREQ_UNIT_10KHZ	0x80
 #define CGBC_I2C_FREQ_UNIT_100KHZ	0xC0
+
+#define CGBC_I2C_FREQ_UNIT_MASK		0xC0
+#define CGBC_I2C_FREQ_VALUE_MASK	0x3F
 
 #define CGBC_I2C_READ_MAX_LEN	31
 #define CGBC_I2C_WRITE_MAX_LEN	32
@@ -49,7 +59,8 @@ enum {
 };
 
 struct i2c_algo_cgbc_data {
-	u8	bus_id;
+	u8		bus_id;
+	unsigned long	read_maxtime;
 };
 
 struct cgbc_i2c_data {
@@ -68,7 +79,7 @@ struct cgbc_i2c_transfer {
 	u8 read;
 	u8 addr;
 #define CGBC_I2C_TRANSFER_HEADER_SIZE  4
-	u8 data[32];
+	u8 data[CGBC_I2C_WRITE_MAX_LEN];
 };
 
 static unsigned int bus_frequency = CGBC_I2C_FREQ_DEFAULT;
@@ -92,7 +103,8 @@ static int cgbc_i2c_get_status(struct i2c_adapter *adap)
 	return status;
 }
 
-static int cgbc_i2c_set_frequency(struct i2c_adapter *adap, unsigned int bus_frequency)
+static int cgbc_i2c_set_frequency(struct i2c_adapter *adap,
+				  unsigned int bus_frequency)
 {
 	struct i2c_algo_cgbc_data *algo_data = adap->algo_data;
 	struct cgbc_i2c_data *i2c = i2c_get_adapdata(adap);
@@ -100,24 +112,53 @@ static int cgbc_i2c_set_frequency(struct i2c_adapter *adap, unsigned int bus_fre
 	u8 cmd[2], data;
 	int ret;
 
-	if (bus_frequency > CGBC_I2C_FREQ_MAX)
-		bus_frequency = CGBC_I2C_FREQ_MAX;
+	if (bus_frequency > CGBC_I2C_FREQ_MAX ||
+	    bus_frequency < CGBC_I2C_FREQ_MIN)
+		bus_frequency = CGBC_I2C_FREQ_DEFAULT;
 
 	cmd[0] = CGBC_I2C_CMD_SPEED | algo_data->bus_id;
 
-	if (bus_frequency >= 100)
-		cmd[1] = CGBC_I2C_FREQ_UNIT_100KHZ | (bus_frequency / 100);
-	else if (bus_frequency >= 10)
+	if (bus_frequency <= CGBC_I2C_FREQ_VALUE_MASK)
+		cmd[1] = CGBC_I2C_FREQ_UNIT_1KHZ | bus_frequency;
+	else if ((bus_frequency / 10) <= CGBC_I2C_FREQ_VALUE_MASK)
 		cmd[1] = CGBC_I2C_FREQ_UNIT_10KHZ | (bus_frequency / 10);
 	else
-		cmd[1] = CGBC_I2C_FREQ_UNIT_1KHZ | bus_frequency;
+		cmd[1] = CGBC_I2C_FREQ_UNIT_100KHZ | (bus_frequency / 100);
 
 	ret = cgbc_command(cgbc, &cmd, sizeof(cmd), &data, 1, NULL);
 	if (ret)
-		return dev_err_probe(i2c->dev, ret, "Failed to initialize I2C bus %s",
+		return dev_err_probe(i2c->dev, ret,
+				     "Failed to initialize I2C bus %s",
 				     adap->name);
 
-	dev_info(i2c->dev, "%s initialized at %dkHz\n", adap->name, 100);
+	cmd[1] = 0x00;
+	ret = cgbc_command(cgbc, &cmd, sizeof(cmd), &data, 1, NULL);
+	if (ret)
+		return dev_err_probe(i2c->dev, ret,
+				     "Failed to read I2C bus frequency");
+
+	switch (data & CGBC_I2C_FREQ_UNIT_MASK) {
+	case CGBC_I2C_FREQ_UNIT_100KHZ:
+		bus_frequency = (data & CGBC_I2C_FREQ_VALUE_MASK) * 100;
+		break;
+	case CGBC_I2C_FREQ_UNIT_10KHZ:
+		bus_frequency = (data & CGBC_I2C_FREQ_VALUE_MASK) * 10;
+		break;
+	default:
+		bus_frequency = data & CGBC_I2C_FREQ_VALUE_MASK;
+		break;
+	}
+
+	dev_info(i2c->dev, "%s initialized at %dkHz\n",
+		 adap->name, bus_frequency);
+
+	/*
+	 * The read_maxtime is the maximum time to wait during a read to get
+	 * data. At maximum CGBC_I2C_READ_MAX_LEN can be read by command.
+	 * So calculate the max time to size correctly the timeout.
+	 */
+	algo_data->read_maxtime = (BITS_PER_BYTE + 1) * CGBC_I2C_READ_MAX_LEN
+		* USEC_PER_MSEC / bus_frequency;
 
 	return 0;
 }
@@ -149,13 +190,16 @@ static int cgbc_i2c_xfer_msg(struct i2c_adapter *adap)
 	if (i2c->state == STATE_INIT || i2c->state == STATE_WRITE) {
 		xfer.write = CGBC_I2C_START;
 		i2c->state = (msg->flags & I2C_M_RD) ? STATE_READ : STATE_WRITE;
-	} else
+	} else {
 		xfer.write = 0x00;
+	}
 
-	max_len = (i2c->state == STATE_READ) ? CGBC_I2C_READ_MAX_LEN : CGBC_I2C_WRITE_MAX_LEN;
-	if (msg->len - i2c->pos > max_len)
+	max_len = (i2c->state == STATE_READ) ?
+		CGBC_I2C_READ_MAX_LEN : CGBC_I2C_WRITE_MAX_LEN;
+
+	if (msg->len - i2c->pos > max_len) {
 		len = max_len;
-	else {
+	} else {
 		len = msg->len - i2c->pos;
 
 		if (i2c->nmsgs == 1)
@@ -168,7 +212,9 @@ static int cgbc_i2c_xfer_msg(struct i2c_adapter *adap)
 		for (i = 0; i < len; i++)
 			xfer.data[i] = msg->buf[i2c->pos + i];
 
-		ret =  cgbc_command(cgbc, &xfer, CGBC_I2C_TRANSFER_HEADER_SIZE + len, NULL, 0, NULL);
+		ret =  cgbc_command(cgbc, &xfer,
+				    CGBC_I2C_TRANSFER_HEADER_SIZE + len,
+				    NULL, 0, NULL);
 		if (ret)
 			goto err;
 	} else if (i2c->state == STATE_READ) {
@@ -178,17 +224,20 @@ static int cgbc_i2c_xfer_msg(struct i2c_adapter *adap)
 		if (i2c->nmsgs > 1 || msg->len - i2c->pos > max_len)
 			xfer.read |= CGBC_I2C_LAST_ACK;
 
-		ret = cgbc_command(cgbc, &xfer, CGBC_I2C_TRANSFER_HEADER_SIZE, NULL, 0, NULL);
+		ret = cgbc_command(cgbc, &xfer, CGBC_I2C_TRANSFER_HEADER_SIZE,
+				   NULL, 0, NULL);
 		if (ret)
 			goto err;
 
-		read_poll_timeout(cgbc_i2c_get_status, ret, ret != CGBC_I2C_STAT_BUSY,
-				  0, 1000000, 0, adap);
+		read_poll_timeout(cgbc_i2c_get_status, ret,
+				  ret != CGBC_I2C_STAT_BUSY, 0,
+				  2 * algo_data->read_maxtime, false, adap);
 		if (ret < 0)
 			goto err;
 
 		cmd_data = CGBC_I2C_CMD_DATA | algo_data->bus_id;
-		ret = cgbc_command(cgbc, &cmd_data, sizeof(cmd_data), msg->buf + i2c->pos, len, NULL);
+		ret = cgbc_command(cgbc, &cmd_data, sizeof(cmd_data),
+				   msg->buf + i2c->pos, len, NULL);
 		if (ret)
 			goto err;
 	}
@@ -198,8 +247,9 @@ static int cgbc_i2c_xfer_msg(struct i2c_adapter *adap)
 			i2c->msg++;
 			i2c->nmsgs--;
 			i2c->pos = 0;
-		} else
+		} else {
 			i2c->pos += len;
+		}
 	}
 
 	if (i2c->nmsgs == 0)
@@ -212,8 +262,8 @@ err:
 	return ret;
 }
 
-
-static int cgbc_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs, int num)
+static int cgbc_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
+			 int num)
 {
 	struct cgbc_i2c_data *i2c = i2c_get_adapdata(adap);
 	unsigned long timeout = jiffies + HZ;
@@ -299,7 +349,7 @@ static int cgbc_i2c_probe(struct platform_device *pdev)
 
 static void cgbc_i2c_remove(struct platform_device *pdev)
 {
-	 struct cgbc_i2c_data *i2c = platform_get_drvdata(pdev);
+	struct cgbc_i2c_data *i2c = platform_get_drvdata(pdev);
 
 	i2c_del_adapter(&i2c->adap);
 }

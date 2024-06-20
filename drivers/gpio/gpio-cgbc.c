@@ -50,7 +50,8 @@ static int cgbc_gpio_get(struct gpio_chip *chip, unsigned int offset)
 	return (int)((val & (u8)BIT(offset % 8)) >> (offset % 8));
 }
 
-static void cgbc_gpio_set(struct gpio_chip *chip, unsigned int offset, int value)
+static void cgbc_gpio_set(struct gpio_chip *chip,
+			  unsigned int offset, int value)
 {
 	struct cgbc_gpio_data *gpio = gpiochip_get_data(chip);
 	struct cgbc_device_data *cgbc = gpio->cgbc;
@@ -82,16 +83,16 @@ static void cgbc_gpio_set(struct gpio_chip *chip, unsigned int offset, int value
 	if (value)
 		gpio_values |= BIT(offset);
 	else
-		gpio_values &= ~((u16) BIT(offset));
+		gpio_values &= ~((u16)BIT(offset));
 
 	cmd[0] = CGBC_GPIO_CMD_SET;
 	cmd[1] = 0x00;
-	cmd[2] = (u8) (gpio_values & 0xFF);
+	cmd[2] = (u8)(gpio_values & 0xFF);
 	cgbc_command(cgbc, &cmd[0], sizeof(cmd), &val, 1, NULL);
 
 	if (offset > 7) {
 		cmd[1] = 0x01;
-		cmd[2] = (u8) ((gpio_values >> 8) & 0xFF);
+		cmd[2] = (u8)((gpio_values >> 8) & 0xFF);
 		cgbc_command(cgbc, &cmd[0], sizeof(cmd), &val, 1, NULL);
 	}
 
@@ -99,7 +100,8 @@ end:
 	mutex_unlock(&gpio->lock);
 }
 
-static int cgbc_gpio_direction_set(struct gpio_chip *chip, unsigned offset, int direction)
+static int cgbc_gpio_direction_set(struct gpio_chip *chip,
+				   unsigned int offset, int direction)
 {
 	struct cgbc_gpio_data *gpio = gpiochip_get_data(chip);
 	struct cgbc_device_data *cgbc = gpio->cgbc;
@@ -135,7 +137,7 @@ static int cgbc_gpio_direction_set(struct gpio_chip *chip, unsigned offset, int 
 
 	cmd[0] = CGBC_GPIO_CMD_DIR_SET;
 	cmd[1] = 0x00;
-	cmd[2] = (u8) (gpio_values & 0xFF);
+	cmd[2] = (u8)(gpio_values & 0xFF);
 
 	ret = cgbc_command(cgbc, &cmd[0], sizeof(cmd), &val, 1, NULL);
 	if (ret)
@@ -143,7 +145,7 @@ static int cgbc_gpio_direction_set(struct gpio_chip *chip, unsigned offset, int 
 
 	if (offset > 7) {
 		cmd[1] = 0x01;
-		cmd[2] = (u8) ((gpio_values >> 8) & 0xFF);
+		cmd[2] = (u8)((gpio_values >> 8) & 0xFF);
 
 		cgbc_command(cgbc, &cmd[0], sizeof(cmd), &val, 1, NULL);
 	}
@@ -154,12 +156,14 @@ end:
 	return ret;
 }
 
-static int cgbc_gpio_direction_input(struct gpio_chip *chip, unsigned int offset)
+static int cgbc_gpio_direction_input(struct gpio_chip *chip,
+				     unsigned int offset)
 {
 	return cgbc_gpio_direction_set(chip, offset, GPIO_LINE_DIRECTION_IN);
 }
 
-static int cgbc_gpio_direction_output(struct gpio_chip *chip, unsigned offset, int value)
+static int cgbc_gpio_direction_output(struct gpio_chip *chip,
+				      unsigned int offset, int value)
 {
 	int ret;
 
@@ -170,7 +174,7 @@ static int cgbc_gpio_direction_output(struct gpio_chip *chip, unsigned offset, i
 	return ret;
 }
 
-static int cgbc_gpio_get_direction(struct gpio_chip *chip, unsigned offset)
+static int cgbc_gpio_get_direction(struct gpio_chip *chip, unsigned int offset)
 {
 	struct cgbc_gpio_data *gpio = gpiochip_get_data(chip);
 	struct cgbc_device_data *cgbc = gpio->cgbc;
@@ -230,7 +234,8 @@ static int cgbc_gpio_probe(struct platform_device *pdev)
 
 	ret = devm_gpiochip_add_data(dev, chip, gpio);
 	if (ret)
-		return dev_err_probe(dev, ret, "Could not register GPIO chip\n");
+		return dev_err_probe(dev, ret,
+				     "Could not register GPIO chip\n");
 
 	dev_info(dev, "GPIO functionality initialized with %d pins\n",
 		 chip->ngpio);

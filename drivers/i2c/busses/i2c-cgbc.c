@@ -178,7 +178,7 @@ static int cgbc_i2c_xfer_msg(struct i2c_adapter *adap)
 	};
 
 	if (i2c->state == STATE_DONE)
-		return ret;
+		return 0;
 
 	ret = cgbc_i2c_get_status(adap);
 

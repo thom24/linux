@@ -3855,9 +3855,6 @@ static int __maybe_unused ti_sci_resume_noirq(struct device *dev)
 					  irq_desc->secondary_host, TI_SCI_MSG_SET_IRQ);
 	}
 
-	ti_sci_msg_cmd_lpm_wake_reason(&info->handle, &source, &time);
-	dev_info(dev, "%s: wakeup source: 0x%X\n", __func__, source);
-
 	return ret;
 }
 

@@ -3829,19 +3829,6 @@ static int ti_sci_suspend(struct device *dev)
 	return 0;
 }
 
-static int ti_sci_suspend_noirq(struct device *dev)
-{
-	struct ti_sci_info *info = dev_get_drvdata(dev);
-	int ret = 0;
-
-	ret = ti_sci_cmd_set_io_isolation(&info->handle, TISCI_MSG_VALUE_IO_ENABLE);
-	if (ret)
-		return ret;
-	dev_dbg(dev, "%s: set isolation: %d\n", __func__, ret);
-
-	return 0;
-}
-
 static int __maybe_unused ti_sci_resume_noirq(struct device *dev)
 {
 	const struct ti_sci_desc *desc = device_get_match_data(dev);
@@ -3868,11 +3855,6 @@ static int __maybe_unused ti_sci_resume_noirq(struct device *dev)
 					  irq_desc->secondary_host, TI_SCI_MSG_SET_IRQ);
 	}
 
-	ret = ti_sci_cmd_set_io_isolation(&info->handle, TISCI_MSG_VALUE_IO_DISABLE);
-	if (ret)
-		return ret;
-	dev_dbg(dev, "%s: disable isolation: %d\n", __func__, ret);
-
 	ti_sci_msg_cmd_lpm_wake_reason(&info->handle, &source, &time);
 	dev_info(dev, "%s: wakeup source: 0x%X\n", __func__, source);
 
@@ -3881,7 +3863,7 @@ static int __maybe_unused ti_sci_resume_noirq(struct device *dev)
 
 static const struct dev_pm_ops ti_sci_pm_ops = {
 	.suspend = ti_sci_suspend,
-	SET_NOIRQ_SYSTEM_SLEEP_PM_OPS(ti_sci_suspend_noirq, ti_sci_resume_noirq)
+	SET_NOIRQ_SYSTEM_SLEEP_PM_OPS(NULL, ti_sci_resume_noirq)
 };
 
 static int ti_sci_init_suspend(struct platform_device *pdev,

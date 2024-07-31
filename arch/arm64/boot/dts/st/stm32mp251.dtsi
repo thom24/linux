@@ -1693,6 +1693,7 @@
 					#size-cells = <0>;
 					nvmem-cells = <&vrefint>;
 					nvmem-cell-names = "vrefint";
+					st,adc-trigger-sel = <0>;
 					status = "disabled";
 					channel@14 {
 						reg = <14>;
@@ -1712,6 +1713,7 @@
 					#size-cells = <0>;
 					nvmem-cells = <&vrefint>;
 					nvmem-cell-names = "vrefint";
+					st,adc-trigger-sel = <0>;
 					status = "disabled";
 					channel@14 {
 						reg = <14>;
@@ -1902,6 +1904,7 @@
 					#size-cells = <0>;
 					nvmem-cells = <&vrefint>;
 					nvmem-cell-names = "vrefint";
+					st,adc-trigger-sel = <1>;
 					status = "disabled";
 					channel@14 {
 						reg = <14>;

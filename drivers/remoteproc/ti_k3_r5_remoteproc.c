@@ -527,6 +527,7 @@ static int k3_r5_suspend(struct rproc *rproc)
 	kproc->suspend_status = 0;
 	reinit_completion(&kproc->suspend_comp);
 
+#if MBOX_SUSPEND_SYSTEM_IMPLEMENTED
 	ret = mbox_send_message(kproc->mbox, (void *)msg);
 	if (ret < 0) {
 		dev_err(dev, "PM mbox_send_message failed: %d\n", ret);
@@ -540,7 +541,9 @@ static int k3_r5_suspend(struct rproc *rproc)
 		dev_pm_qos_add_request(kproc->dev, &qos_req, DEV_PM_QOS_RESUME_LATENCY, 0);
 		return 0;
 	}
-
+#else
+	kproc->suspend_status = RP_MBOX_SUSPEND_ACK;
+#endif
 	if (kproc->suspend_status == RP_MBOX_SUSPEND_ACK) {
 		struct k3_r5_core *core = kproc->core;
 		const struct ti_sci_handle *ti_sci = core->ti_sci;

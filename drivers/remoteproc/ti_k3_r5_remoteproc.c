@@ -518,12 +518,20 @@ static int k3_r5_rproc_request_mbox(struct rproc *rproc)
 static int k3_r5_suspend(struct rproc *rproc)
 {
 	struct k3_r5_rproc *kproc = rproc->priv;
+	unsigned int rproc_state = kproc->rproc->state;
+	struct device *cdev = kproc->core->dev;
+	struct k3_r5_core *core;
 	unsigned long msg = RP_MBOX_SUSPEND_SYSTEM;
 	unsigned long to = msecs_to_jiffies(5000);
 	struct dev_pm_qos_request qos_req;
 	struct device *dev = kproc->dev;
 	int ret;
 
+	if (rproc_state != RPROC_RUNNING && rproc_state != RPROC_ATTACHED) {
+		return 0;
+	}
+
+	if (rproc_state == RPROC_RUNNING) {
 	kproc->suspend_status = 0;
 	reinit_completion(&kproc->suspend_comp);
 
@@ -545,22 +553,30 @@ static int k3_r5_suspend(struct rproc *rproc)
 	kproc->suspend_status = RP_MBOX_SUSPEND_ACK;
 #endif
 	if (kproc->suspend_status == RP_MBOX_SUSPEND_ACK) {
-		struct k3_r5_core *core = kproc->core;
-		const struct ti_sci_handle *ti_sci = core->ti_sci;
-
 		// shutdown the remote core
 		rproc_shutdown(rproc);
-		ret = ti_sci->ops.dev_ops.put_device(ti_sci, core->ti_sci_id);
-		if (ret) {
-			dev_err(dev, "module-reset assert failed, ret = %d\n", ret);
-			if (reset_control_deassert(core->reset))
-				dev_warn(dev, "local-reset deassert back failed\n");
-		}
 		kproc->rproc->state = RPROC_SUSPENDED;
 	} else if (kproc->suspend_status == RP_MBOX_SUSPEND_CANCEL) {
 		kproc->rproc->state = RPROC_SUSPENDED;
 	}
+	}
 
+	if (rproc_state == RPROC_ATTACHED) {
+		rproc_detach(kproc->rproc);
+		kproc->rproc->state = RPROC_SUSPENDED;
+	} else {
+		core = kproc->core;
+
+		ret = core->ti_sci->ops.dev_ops.put_device(core->ti_sci,
+							   core->ti_sci_id);
+		if (ret) {
+			dev_err(cdev, "module-reset assert failed, ret = %d\n",
+				ret);
+			if (reset_control_deassert(core->reset))
+				dev_warn(cdev,
+					 "local-reset deassert back failed\n");
+		}
+	}
 	return 0;
 }
 
@@ -1437,9 +1453,6 @@ static int k3_r5_rproc_configure_mode(struct k3_r5_rproc *kproc)
 						k3_r5_get_loaded_rsc_table;
 	} else if (!c_state) {
 		dev_info(cdev, "configured R5F for remoteproc mode\n");
-		/* add support for suspend/resume */
-		kproc->pm_notifier.notifier_call = r5f_pm_notifier_call;
-		register_pm_notifier(&kproc->pm_notifier);
 		ret = 0;
 	} else {
 		dev_err(cdev, "mismatched mode: local_reset = %s, module_reset = %s, core_state = %s\n",
@@ -1448,6 +1461,10 @@ static int k3_r5_rproc_configure_mode(struct k3_r5_rproc *kproc)
 			halted ? "halted" : "unhalted");
 		ret = -EINVAL;
 	}
+
+	/* add support for suspend/resume */
+	kproc->pm_notifier.notifier_call = r5f_pm_notifier_call;
+	register_pm_notifier(&kproc->pm_notifier);
 
 	/* fixup TCMs, cluster & core flags to actual values in IPC-only mode */
 	if (ret > 0) {

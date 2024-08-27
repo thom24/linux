@@ -159,6 +159,7 @@ struct k3_r5_core {
 	u32 btcm_enable;
 	u32 loczrama;
 	bool released_from_reset;
+	bool should_be_resumed;
 };
 
 /**
@@ -555,11 +556,12 @@ static int k3_r5_suspend(struct rproc *rproc)
 	if (kproc->suspend_status == RP_MBOX_SUSPEND_ACK) {
 		// shutdown the remote core
 		rproc_shutdown(rproc);
-		kproc->rproc->state = RPROC_SUSPENDED;
 	} else if (kproc->suspend_status == RP_MBOX_SUSPEND_CANCEL) {
 		kproc->rproc->state = RPROC_SUSPENDED;
 	}
 	}
+
+	kproc->core->should_be_resumed = true;
 
 	if (rproc_state == RPROC_ATTACHED) {
 		rproc_detach(kproc->rproc);
@@ -673,7 +675,7 @@ static int r5f_pm_notifier_call(struct notifier_block *bl,
 			 * In LOCKSTEP mode, rproc is allocated only for
 			 * core0
 			 */
-			if (core->rproc && core->rproc->state == RPROC_SUSPENDED)
+			if (core->rproc && core->should_be_resumed)
 				k3_r5_resume(core->rproc);
 		}
 		break;

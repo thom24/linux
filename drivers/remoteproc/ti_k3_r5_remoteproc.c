@@ -122,6 +122,7 @@ struct k3_r5_cluster {
 	wait_queue_head_t core_transition;
 	const struct k3_r5_soc_data *soc_data;
 	struct dev_pm_qos_request qos_req;
+	struct notifier_block pm_notifier;
 };
 
 /**
@@ -182,7 +183,6 @@ struct k3_r5_rproc {
 	int num_rmems;
 	struct completion shut_comp;
 	struct completion suspend_comp;
-	struct notifier_block pm_notifier;
 	u32 suspend_status;
 };
 
@@ -645,21 +645,37 @@ static int k3_r5_resume(struct rproc *rproc)
 static int r5f_pm_notifier_call(struct notifier_block *bl,
 				unsigned long state, void *unused)
 {
-	struct k3_r5_rproc *kproc = container_of(bl, struct k3_r5_rproc,
-						 pm_notifier);
-	struct rproc *rproc = kproc->rproc;
+	struct k3_r5_cluster *cluster = container_of(bl, struct k3_r5_cluster,
+						     pm_notifier);
+	struct k3_r5_core *core;
 
 	switch (state) {
 	case PM_HIBERNATION_PREPARE:
 	case PM_RESTORE_PREPARE:
 	case PM_SUSPEND_PREPARE:
-		return k3_r5_suspend(rproc);
+		/* core1 should be suspended before core0 */
+		list_for_each_entry_reverse(core, &cluster->cores, elem) {
+			/*
+			 * In LOCKSTEP mode, rproc is allocated only for
+			 * core0
+			 */
+			if (core->rproc)
+				k3_r5_suspend(core->rproc);
+		}
 
+		break;
 	case PM_POST_HIBERNATION:
 	case PM_POST_RESTORE:
 	case PM_POST_SUSPEND:
-		if (rproc->state == RPROC_SUSPENDED)
-			return k3_r5_resume(rproc);
+		/* core0 should be started before core1 */
+		list_for_each_entry(core, &cluster->cores, elem) {
+			/*
+			 * In LOCKSTEP mode, rproc is allocated only for
+			 * core0
+			 */
+			if (core->rproc && core->rproc->state == RPROC_SUSPENDED)
+				k3_r5_resume(core->rproc);
+		}
 		break;
 	}
 	return 0;
@@ -1477,12 +1493,6 @@ static int k3_r5_rproc_configure_mode(struct k3_r5_rproc *kproc)
 		ret = -EINVAL;
 	}
 
-	/* add support for suspend/resume */
-	if (!kproc->pm_notifier.notifier_call) {
-		kproc->pm_notifier.notifier_call = r5f_pm_notifier_call;
-		register_pm_notifier(&kproc->pm_notifier);
-	}
-
 	/* fixup TCMs, cluster & core flags to actual values in IPC-only mode */
 	if (ret > 0) {
 		if (core == core0)
@@ -1607,6 +1617,9 @@ init_rmem:
 		}
 	}
 
+	cluster->pm_notifier.notifier_call = r5f_pm_notifier_call;
+	register_pm_notifier(&cluster->pm_notifier);
+
 	return 0;
 
 err_split:
@@ -1668,7 +1681,7 @@ static void k3_r5_cluster_rproc_exit(void *data)
 		rproc_del(rproc);
 
 		k3_r5_reserved_mem_exit(kproc);
-		unregister_pm_notifier(&kproc->pm_notifier);
+		unregister_pm_notifier(&cluster->pm_notifier);
 	}
 }
 

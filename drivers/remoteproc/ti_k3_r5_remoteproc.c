@@ -580,31 +580,60 @@ static int k3_r5_suspend(struct rproc *rproc)
 	return 0;
 }
 
+static int k3_r5_rproc_configure_mode(struct k3_r5_rproc *kproc);
+static int k3_r5_rproc_configure(struct k3_r5_rproc *kproc);
+
 static int k3_r5_resume(struct rproc *rproc)
 {
 	struct k3_r5_rproc *kproc = rproc->priv;
-	enum core_status cstatus = CORE_IS_OFF;
+	struct k3_r5_cluster *cluster = kproc->cluster;
 	unsigned long msg = RP_MBOX_ECHO_REQUEST;
 	struct k3_r5_core *core = kproc->core;
 	struct device *dev = kproc->dev;
 	int ret;
 
-	ret = get_core_status(core, &cstatus);
-	if (cstatus == CORE_IS_OFF) {
-		dev_info(dev, "Core is off in resume\n");
-		rproc_boot(rproc);
-	} else {
-		dev_err(dev, "Core is on in resume\n");
-		msg = RP_MBOX_ECHO_REQUEST;
-		ret = mbox_send_message(kproc->mbox, (void *)msg);
-		if (ret < 0) {
-			dev_err(dev, "PM mbox_send_message failed: %d\n",
-				ret);
-			return ret;
+	list_for_each_entry(core, &cluster->cores, elem) {
+		/*
+		 * In split mode, request only current core.
+		 * Otherwise, request all cores.
+		 */
+		if ((cluster->mode != CLUSTER_MODE_SPLIT) ||
+		    ((cluster->mode == CLUSTER_MODE_SPLIT)
+		     && (core == kproc->core))) {
+			ret = ti_sci_proc_request(core->tsp);
+			if (ret) {
+				dev_err(kproc->dev,
+					"ti_sci_proc_request failed (%d)\n",
+					ret);
+				return -EBUSY;
+			}
 		}
 	}
 
-	kproc->rproc->state = RPROC_RUNNING;
+	ret = k3_r5_rproc_configure_mode(kproc);
+	if (ret < 0) {
+		return -EBUSY;
+	}
+
+	/*
+	 * ret > 0 for IPC-only mode
+	 * ret == 0 for remote proc mode
+	 */
+	if (ret == 0) {
+		/*
+		 * remote proc looses its configuration when powered off.
+		 * So, we have to configure it again on resume.
+		 */
+		ret = k3_r5_rproc_configure(kproc);
+		if (ret < 0) {
+			dev_err(kproc->dev,
+				"k3_r5_rproc_configure failed (%d)\n", ret);
+			return -EBUSY;
+		}
+	}
+
+	rproc_boot(rproc);
+
 	return 0;
 }
 
@@ -1432,6 +1461,13 @@ static int k3_r5_rproc_configure_mode(struct k3_r5_rproc *kproc)
 						k3_r5_get_loaded_rsc_table;
 	} else if (!c_state) {
 		dev_info(cdev, "configured R5F for remoteproc mode\n");
+		kproc->rproc->ops->prepare = k3_r5_rproc_prepare;
+		kproc->rproc->ops->unprepare = k3_r5_rproc_unprepare;
+		kproc->rproc->ops->start = k3_r5_rproc_start;
+		kproc->rproc->ops->stop	= k3_r5_rproc_stop;
+		kproc->rproc->ops->attach = NULL;
+		kproc->rproc->ops->detach = NULL;
+		kproc->rproc->ops->get_loaded_rsc_table = NULL;
 		ret = 0;
 	} else {
 		dev_err(cdev, "mismatched mode: local_reset = %s, module_reset = %s, core_state = %s\n",
@@ -1442,8 +1478,10 @@ static int k3_r5_rproc_configure_mode(struct k3_r5_rproc *kproc)
 	}
 
 	/* add support for suspend/resume */
-	kproc->pm_notifier.notifier_call = r5f_pm_notifier_call;
-	register_pm_notifier(&kproc->pm_notifier);
+	if (!kproc->pm_notifier.notifier_call) {
+		kproc->pm_notifier.notifier_call = r5f_pm_notifier_call;
+		register_pm_notifier(&kproc->pm_notifier);
+	}
 
 	/* fixup TCMs, cluster & core flags to actual values in IPC-only mode */
 	if (ret > 0) {

@@ -1885,6 +1885,7 @@ static const struct soc_device_attribute has_lpm[] = {
 	{ .family = "AM62AX" },
 	{ .family = "AM62PX" },
 	{ .family = "J7200" },
+	{ .family = "J784S4" },
 	{ /* sentinel */ }
 };
 

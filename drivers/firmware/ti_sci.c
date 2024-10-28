@@ -3647,6 +3647,7 @@ static int ti_sci_prepare_system_suspend(struct ti_sci_info *info)
 			 * For the DM_MANAGED mode the context is reserved for
 			 * internal use and can be 0
 			 */
+			return 0;
 			return ti_sci_cmd_prepare_sleep(&info->handle,
 							TISCI_MSG_VALUE_SLEEP_MODE_DM_MANAGED,
 							0, 0, 0);

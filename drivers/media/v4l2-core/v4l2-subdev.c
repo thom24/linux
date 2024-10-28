@@ -369,6 +369,15 @@ static int call_s_stream(struct v4l2_subdev *sd, int enable)
 	if (WARN_ON(sd->s_stream_enabled == !!enable))
 		return 0;
 
+#if IS_REACHABLE(CONFIG_LEDS_CLASS)
+	if (!IS_ERR_OR_NULL(sd->privacy_led)) {
+		if (enable)
+			led_set_brightness(sd->privacy_led,
+					   sd->privacy_led->max_brightness);
+		else
+			led_set_brightness(sd->privacy_led, 0);
+	}
+#endif
 	ret = sd->ops->video->s_stream(sd, enable);
 
 	if (!enable && ret < 0) {
@@ -378,17 +387,6 @@ static int call_s_stream(struct v4l2_subdev *sd, int enable)
 
 	if (!ret) {
 		sd->s_stream_enabled = enable;
-
-#if IS_REACHABLE(CONFIG_LEDS_CLASS)
-		if (!IS_ERR_OR_NULL(sd->privacy_led)) {
-			if (enable)
-				led_set_brightness(sd->privacy_led,
-						   sd->privacy_led->max_brightness);
-			else
-				led_set_brightness(sd->privacy_led, 0);
-		}
-#endif
-	}
 
 	return ret;
 }

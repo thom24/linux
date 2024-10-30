@@ -1267,6 +1267,13 @@ static int k3_r5_rproc_configure_mode(struct k3_r5_rproc *kproc)
 						k3_r5_get_loaded_rsc_table;
 	} else if (!c_state) {
 		dev_info(cdev, "configured R5F for remoteproc mode\n");
+		kproc->rproc->ops->prepare = k3_r5_rproc_prepare;
+		kproc->rproc->ops->unprepare = k3_r5_rproc_unprepare;
+		kproc->rproc->ops->start = k3_r5_rproc_start;
+		kproc->rproc->ops->stop	= k3_r5_rproc_stop;
+		kproc->rproc->ops->attach = NULL;
+		kproc->rproc->ops->detach = NULL;
+		kproc->rproc->ops->get_loaded_rsc_table = NULL;
 		ret = 0;
 	} else {
 		dev_err(cdev, "mismatched mode: local_reset = %s, module_reset = %s, core_state = %s\n",

@@ -118,6 +118,7 @@ struct pinctrl_dev *get_pinctrl_dev_from_devname(const char *devname)
 
 	return NULL;
 }
+EXPORT_SYMBOL_GPL(get_pinctrl_dev_from_devname);
 
 struct pinctrl_dev *get_pinctrl_dev_from_of_node(struct device_node *np)
 {
@@ -802,6 +803,8 @@ int pinctrl_gpio_request(struct gpio_chip *gc, unsigned int offset)
 	struct pinctrl_dev *pctldev;
 	int ret, pin;
 
+	printk("!!!! %s: %d\n", __func__, __LINE__);
+
 	ret = pinctrl_get_device_gpio_range(gc, offset, &pctldev, &range);
 	if (ret) {
 		if (pinctrl_ready_for_gpio_range(gc, offset))
@@ -941,11 +944,12 @@ static struct pinctrl_state *find_state(struct pinctrl *p,
 					const char *name)
 {
 	struct pinctrl_state *state;
-
-	list_for_each_entry(state, &p->states, node)
+	printk("### %s: %d\n", __func__, __LINE__);
+	list_for_each_entry(state, &p->states, node) {
+		printk("###### %s, %s\n", name, state->name);
 		if (!strcmp(state->name, name))
 			return state;
-
+	}
 	return NULL;
 }
 
@@ -1076,13 +1080,18 @@ static struct pinctrl *create_pinctrl(struct device *dev,
 	}
 
 	devname = dev_name(dev);
+	printk("### %s: %d: devname = %s\n", __func__, __LINE__, devname);
 
 	mutex_lock(&pinctrl_maps_mutex);
 	/* Iterate over the pin control maps to locate the right ones */
 	for_each_pin_map(maps_node, map) {
+		printk("### %s: %d: map loop: devname = %s\n", __func__, __LINE__, devname);
+		printk("### %s: %d: map loop: map->dev_name = %s\n", __func__, __LINE__, map->dev_name);
 		/* Map must be for this device */
-		if (strcmp(map->dev_name, devname))
+		if (strcmp(map->dev_name, devname)) {
+			printk("### %s: %d: Map must be for this device \n", __func__, __LINE__);
 			continue;
+		}
 		/*
 		 * If pctldev is not null, we are claiming hog for it,
 		 * that means, setting that is served by pctldev by itself.
@@ -1090,10 +1099,14 @@ static struct pinctrl *create_pinctrl(struct device *dev,
 		 * Thus we must skip map that is for this device but is served
 		 * by other device.
 		 */
+		printk("### %s: %d\n", __func__, __LINE__);
 		if (pctldev &&
-		    strcmp(dev_name(pctldev->dev), map->ctrl_dev_name))
-			continue;
+		    strcmp(dev_name(pctldev->dev), map->ctrl_dev_name)) {
+			printk("### %s: %d: hog\n", __func__, __LINE__);
+			break;
+		}
 
+		printk("### %s: %d\n", __func__, __LINE__);
 		ret = add_setting(p, pctldev, map);
 		/*
 		 * At this point the adding of a setting may:

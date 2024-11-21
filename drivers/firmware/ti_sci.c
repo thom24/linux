@@ -1011,6 +1011,9 @@ static int ti_sci_set_clock_state(const struct ti_sci_handle *handle,
 	ret = ti_sci_is_response_ack(resp) ? 0 : -ENODEV;
 
 fail:
+	dev_info(dev, "%s(): ret=%d dev=%u clk=%u flags=%#x state=%u\n",
+		 __func__, ret, dev_id, clk_id, flags, state);
+
 	ti_sci_put_one_xfer(&info->minfo, xfer);
 
 	return ret;
@@ -1086,6 +1089,11 @@ static int ti_sci_cmd_get_clock_state(const struct ti_sci_handle *handle,
 		*current_state = resp->current_state;
 
 fail:
+	dev_info(dev, "%s(): ret=%d dev=%u clk=%u programmed_state=%u current_state=%u\n",
+		 __func__, ret, dev_id, clk_id,
+		 ret == 0 ? resp->programmed_state : 0,
+		 ret == 0 ? resp->current_state : 0);
+
 	ti_sci_put_one_xfer(&info->minfo, xfer);
 
 	return ret;
@@ -1315,6 +1323,9 @@ static int ti_sci_cmd_clk_set_parent(const struct ti_sci_handle *handle,
 	ret = ti_sci_is_response_ack(resp) ? 0 : -ENODEV;
 
 fail:
+	dev_info(dev, "%s(): ret=%d dev=%u clk=%u parent=%u\n",
+		 __func__, ret, dev_id, clk_id, parent_id);
+
 	ti_sci_put_one_xfer(&info->minfo, xfer);
 
 	return ret;
@@ -1384,6 +1395,9 @@ static int ti_sci_cmd_clk_get_parent(const struct ti_sci_handle *handle,
 	}
 
 fail:
+	dev_info(dev, "%s(): ret=%d dev=%u clk=%u parent=%u\n",
+		 __func__, ret, dev_id, clk_id, ret == 0 ? *parent_id : 0);
+
 	ti_sci_put_one_xfer(&info->minfo, xfer);
 
 	return ret;
@@ -1531,6 +1545,10 @@ static int ti_sci_cmd_clk_get_match_freq(const struct ti_sci_handle *handle,
 	else
 		*match_freq = resp->freq_hz;
 
+	dev_info(dev, "%s(): dev=%u clk=%u min=%llu target=%llu max=%llu match=%llu\n",
+		 __func__, dev_id, clk_id, min_freq, target_freq, max_freq,
+		 ret == 0 ? resp->freq_hz : 0);
+
 fail:
 	ti_sci_put_one_xfer(&info->minfo, xfer);
 
@@ -1605,6 +1623,9 @@ static int ti_sci_cmd_clk_set_freq(const struct ti_sci_handle *handle,
 	ret = ti_sci_is_response_ack(resp) ? 0 : -ENODEV;
 
 fail:
+	dev_info(dev, "%s(): ret=%d dev=%u clk=%u min=%llu target=%llu max=%llu\n",
+		 __func__, ret, dev_id, clk_id, min_freq, target_freq, max_freq);
+
 	ti_sci_put_one_xfer(&info->minfo, xfer);
 
 	return ret;
@@ -1670,6 +1691,9 @@ static int ti_sci_cmd_clk_get_freq(const struct ti_sci_handle *handle,
 		*freq = resp->freq_hz;
 
 fail:
+	dev_info(dev, "%s(): ret=%d dev=%u clk=%u freq=%llu\n",
+		 __func__, ret, dev_id, clk_id, ret == 0 ? resp->freq_hz : 0);
+
 	ti_sci_put_one_xfer(&info->minfo, xfer);
 
 	return ret;

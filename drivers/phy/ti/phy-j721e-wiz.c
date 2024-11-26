@@ -488,6 +488,8 @@ static int wiz_init(struct wiz *wiz)
 	struct device *dev = wiz->dev;
 	int ret;
 
+	printk("### %s: %d\n", __func__, __LINE__);
+
 	ret = wiz_reset(wiz);
 	if (ret) {
 		dev_err(dev, "WIZ reset failed\n");
@@ -1079,12 +1081,17 @@ static int wiz_clock_register(struct wiz *wiz)
 static void wiz_clock_init(struct wiz *wiz)
 {
 	unsigned long rate;
+	unsigned int ptr;
 
 	rate = clk_get_rate(wiz->input_clks[WIZ_CORE_REFCLK]);
+	printk("### %s: %d: rate=%ld\n", __func__, __LINE__, rate);
 	if (rate >= REF_CLK_100MHZ)
 		regmap_field_write(wiz->pma_cmn_refclk_int_mode, 0x1);
 	else
 		regmap_field_write(wiz->pma_cmn_refclk_int_mode, 0x3);
+
+	regmap_field_read(wiz->div_sel_field[CMN_REFCLK_DIG_DIV], &ptr);
+	printk("#### wiz->div_sel_field[CMN_REFCLK_DIG_DIV]) = 0x%x\n", ptr);
 
 	switch (wiz->type) {
 	case AM64_WIZ_10G:
@@ -1107,6 +1114,7 @@ static void wiz_clock_init(struct wiz *wiz)
 
 	if (wiz->input_clks[WIZ_CORE_REFCLK1]) {
 		rate = clk_get_rate(wiz->input_clks[WIZ_CORE_REFCLK1]);
+		printk("### %s: %d: rate=%ld\n", __func__, __LINE__, rate);
 		if (rate >= REF_CLK_100MHZ)
 			regmap_field_write(wiz->pma_cmn_refclk1_int_mode, 0x1);
 		else
@@ -1114,6 +1122,7 @@ static void wiz_clock_init(struct wiz *wiz)
 	}
 
 	rate = clk_get_rate(wiz->input_clks[WIZ_EXT_REFCLK]);
+	printk("### %s: %d: rate=%ld\n", __func__, __LINE__, rate);
 	if (rate >= REF_CLK_100MHZ)
 		regmap_field_write(wiz->pma_cmn_refclk_mode, 0x0);
 	else
@@ -1231,6 +1240,9 @@ static int wiz_phy_reset_assert(struct reset_controller_dev *rcdev,
 
 static int wiz_phy_fullrt_div(struct wiz *wiz, int lane)
 {
+	unsigned int val;
+	regmap_field_read(wiz->p0_fullrt_div[lane], &val);
+	printk("### %s: %d: lan_phy_type=%x val=%x\n", __func__, __LINE__, lane, val); 
 	switch (wiz->type) {
 	case AM64_WIZ_10G:
 		if (wiz->lane_phy_type[lane] == PHY_TYPE_PCIE)
@@ -1257,7 +1269,8 @@ static int wiz_phy_reset_deassert(struct reset_controller_dev *rcdev,
 	struct device *dev = rcdev->dev;
 	struct wiz *wiz = dev_get_drvdata(dev);
 	int ret;
-
+	unsigned int val;
+	printk("### %s: %d: reset id=%ld\n", __func__, __LINE__, id);
 	if (id == 0) {
 		/* if typec-dir gpio was specified, set LN10 SWAP bit based on that */
 		if (wiz->gpio_typec_dir) {
@@ -1301,7 +1314,8 @@ static int wiz_phy_reset_deassert(struct reset_controller_dev *rcdev,
 	ret = wiz_phy_fullrt_div(wiz, id - 1);
 	if (ret)
 		return ret;
-
+	regmap_field_read(wiz->p_enable[id - 1], &val);
+	printk("### %s: %d wiz->p_enable[id - 1]=%x\n", __func__, __LINE__, val);
 	if (wiz->lane_phy_type[id - 1] == PHY_TYPE_DP)
 		ret = regmap_field_write(wiz->p_enable[id - 1], P_ENABLE);
 	else
@@ -1606,6 +1620,8 @@ static int wiz_probe(struct platform_device *pdev)
 			break;
 		}
 	}
+
+	already_configured = false;
 
 	if (!already_configured) {
 		ret = wiz_init(wiz);

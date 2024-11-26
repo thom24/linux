@@ -1598,9 +1598,11 @@ static int cdns_torrent_dp_configure(struct phy *phy,
 	struct cdns_torrent_inst *inst = phy_get_drvdata(phy);
 	struct cdns_torrent_phy *cdns_phy = dev_get_drvdata(phy->dev.parent);
 	int ret;
-
-	if (cdns_phy->already_configured)
+	printk("%s: %d\n", __func__, __LINE__);
+	if (cdns_phy->already_configured) {
+		printk("### %s: %d: already_configured\n", __func__, __LINE__);
 		return 0;
+	}
 
 	ret = cdns_torrent_dp_verify_config(inst, &opts->dp);
 	if (ret) {
@@ -1636,8 +1638,9 @@ static int cdns_torrent_phy_on(struct phy *phy)
 	struct cdns_torrent_phy *cdns_phy = dev_get_drvdata(phy->dev.parent);
 	u32 read_val;
 	int ret;
-
+	dev_info(cdns_phy->dev, "### %s: %d\n", __func__, __LINE__);
 	if (cdns_phy->already_configured) {
+		dev_info(cdns_phy->dev, "### %s: %d: already_configured\n", __func__, __LINE__);
 		/* Give 5ms to 10ms delay for the PIPE clock to be stable */
 		usleep_range(5000, 10000);
 		return 0;
@@ -1645,6 +1648,7 @@ static int cdns_torrent_phy_on(struct phy *phy)
 
 	if (cdns_phy->nsubnodes == 1) {
 		/* Take the PHY lane group out of reset */
+		dev_info(cdns_phy->dev, "### %s: %d\n", __func__, __LINE__);
 		reset_control_deassert(inst->lnk_rst);
 
 		/* Take the PHY out of reset */
@@ -1660,6 +1664,7 @@ static int cdns_torrent_phy_on(struct phy *phy)
 	ret = regmap_field_read_poll_timeout(cdns_phy->phy_pma_cmn_ctrl_1,
 					     read_val, read_val, 1000,
 					     PLL_LOCK_TIMEOUT);
+	dev_info(cdns_phy->dev, "### %s: %d: wait CMN ready\n", __func__, __LINE__);
 	if (ret) {
 		dev_err(cdns_phy->dev, "Timeout waiting for CMN ready\n");
 		return ret;
@@ -1683,7 +1688,7 @@ static int cdns_torrent_phy_off(struct phy *phy)
 	struct cdns_torrent_inst *inst = phy_get_drvdata(phy);
 	struct cdns_torrent_phy *cdns_phy = dev_get_drvdata(phy->dev.parent);
 	int ret;
-
+	dev_info(cdns_phy->dev, "### %s: %d\n", __func__, __LINE__);
 	if (cdns_phy->nsubnodes != 1)
 		return 0;
 
@@ -2320,9 +2325,14 @@ static int cdns_torrent_phy_init(struct phy *phy)
 	struct regmap *regmap;
 	u32 num_regs;
 	int i, j;
+	unsigned int toto;
 
-	if (cdns_phy->already_configured)
+	dev_info(cdns_phy->dev, "%s: %d\n", __func__, __LINE__);
+
+	if (cdns_phy->already_configured) {
+		dev_info(cdns_phy->dev, "### %s: %d: already_configured\n", __func__, __LINE__);
 		return 0;
+	}
 
 	if (cdns_phy->nsubnodes > 1) {
 		if (phy_type == TYPE_DP)
@@ -2342,6 +2352,10 @@ static int cdns_torrent_phy_init(struct phy *phy)
 						  CLK_ANY, CLK_ANY,
 						  phy_type, TYPE_NONE,
 						  ANY_SSC);
+
+	regmap_field_read(cdns_phy->phy_pll_cfg, &toto);
+	dev_info(cdns_phy->dev, "### %s: %d: cdns_phy->phy_pll_cfg=%x\n", __func__, __LINE__, toto);
+
 	if (link_cmn_vals) {
 		reg_pairs = link_cmn_vals->reg_pairs;
 		num_regs = link_cmn_vals->num_regs;
@@ -2479,6 +2493,7 @@ int cdns_torrent_phy_configure_multilink(struct cdns_torrent_phy *cdns_phy)
 	struct regmap *regmap;
 	u32 num_regs, num_protocols, protocol;
 
+	dev_info(cdns_phy->dev, "### %s: %d\n", __func__, __LINE__);
 	num_protocols = hweight32(cdns_phy->protocol_bitmask);
 	/* Maximum 2 protocols are supported */
 	if (num_protocols > 2) {
@@ -2672,11 +2687,15 @@ int cdns_torrent_phy_configure_multilink(struct cdns_torrent_phy *cdns_phy)
 					return ret;
 			}
 
-			reset_control_deassert(cdns_phy->phys[node].lnk_rst);
+	printk("### %s: %d\n", __func__, __LINE__);
+			ret = reset_control_deassert(cdns_phy->phys[node].lnk_rst);
+			if (ret)
+				return ret;
 		}
 	}
 
 	/* Take the PHY out of reset */
+	printk("### %s: %d\n", __func__, __LINE__);
 	ret = reset_control_deassert(cdns_phy->phy_rst);
 	if (ret)
 		return ret;
@@ -2910,15 +2929,18 @@ static int cdns_torrent_phy_probe(struct platform_device *pdev)
 		goto clk_cleanup;
 
 	regmap_field_read(cdns_phy->phy_pma_cmn_ctrl_1, &cdns_phy->already_configured);
+	cdns_phy->already_configured = 0;
 
 	if (!cdns_phy->already_configured) {
+		printk("### %s: %d: NOT already_configured\n", __func__, __LINE__);
 		ret = cdns_torrent_clk(cdns_phy);
 		if (ret)
 			goto clk_cleanup;
 
 		/* Enable APB */
 		reset_control_deassert(cdns_phy->apb_rst);
-	}
+	} else
+		printk("### %s: %d: already_configured\n", __func__, __LINE__);
 
 	for_each_available_child_of_node(dev->of_node, child) {
 		struct phy *gphy;
@@ -3079,7 +3101,8 @@ static int cdns_torrent_phy_probe(struct platform_device *pdev)
 		ret = cdns_torrent_phy_configure_multilink(cdns_phy);
 		if (ret)
 			goto put_lnk_rst;
-	}
+	} else
+		printk("### %s: %d: already_configured\n", __func__, __LINE__);
 
 	phy_provider = devm_of_phy_provider_register(dev, of_phy_simple_xlate);
 	if (IS_ERR(phy_provider)) {
@@ -3161,9 +3184,10 @@ static int cdns_torrent_phy_suspend_noirq(struct device *dev)
 	for (i = 0; i < cdns_phy->nsubnodes; i++)
 		reset_control_assert(cdns_phy->phys[i].lnk_rst);
 
-	if (cdns_phy->already_configured)
+	if (cdns_phy->already_configured) {
+		printk("### %s: %d: already_configured\n", __func__, __LINE__);
 		cdns_phy->already_configured = 0;
-	else {
+	} else {
 		clk_disable_unprepare(cdns_phy->clk1);
 		clk_disable_unprepare(cdns_phy->clk);
 	}
@@ -3182,6 +3206,7 @@ static int cdns_torrent_phy_resume_noirq(struct device *dev)
 		return ret;
 
 	/* Enable APB */
+	printk("### %s: %d\n", __func__, __LINE__);
 	reset_control_deassert(cdns_phy->apb_rst);
 
 	if (cdns_phy->nsubnodes > 1) {

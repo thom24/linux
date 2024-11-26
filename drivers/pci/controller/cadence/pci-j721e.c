@@ -120,9 +120,13 @@ static void j721e_pcie_config_link_irq(struct j721e_pcie *pcie)
 {
 	u32 reg;
 
+	printk("### %s: %d\n", __func__, __LINE__);
 	reg = j721e_pcie_intd_readl(pcie, ENABLE_REG_SYS_2);
+	printk("### %s: %d\n", __func__, __LINE__);
 	reg |= pcie->linkdown_irq_regfield;
+	printk("### %s: %d\n", __func__, __LINE__);
 	j721e_pcie_intd_writel(pcie, ENABLE_REG_SYS_2, reg);
+	printk("### %s: %d\n", __func__, __LINE__);
 }
 
 static int j721e_pcie_start_link(struct cdns_pcie *cdns_pcie)
@@ -554,6 +558,7 @@ static int j721e_pcie_probe(struct platform_device *pdev)
 
 	j721e_pcie_config_link_irq(pcie);
 
+	printk("### READL=0x%x\n", readl(pcie->intd_cfg_base));
 	switch (mode) {
 	case PCI_MODE_RC:
 		gpiod = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_LOW);
@@ -650,6 +655,9 @@ static int j721e_pcie_suspend_noirq(struct device *dev)
 
 	cdns_pcie_disable_phy(pcie->cdns_pcie);
 
+	//pm_runtime_put_sync(dev);
+
+	pm_runtime_force_suspend(dev);
 	return 0;
 }
 
@@ -659,17 +667,27 @@ static int j721e_pcie_resume_noirq(struct device *dev)
 	struct cdns_pcie *cdns_pcie = pcie->cdns_pcie;
 	int ret;
 
+	//pm_runtime_get_sync(dev);
+	pm_runtime_force_resume(dev);
+
+	printk("### %s: %d\n", __func__, __LINE__);
+
+	printk("### READL=0x%x\n", readl(pcie->intd_cfg_base));
+
 	ret = j721e_pcie_ctrl_init(pcie);
+	printk("### %s: %d\n", __func__, __LINE__);
 	if (ret < 0)
 		return ret;
 
 	j721e_pcie_config_link_irq(pcie);
 
+	printk("### %s: %d\n", __func__, __LINE__);
 	/*
 	 * This is not called explicitly in the probe, it is called by
 	 * cdns_pcie_init_phy().
 	 */
 	ret = cdns_pcie_enable_phy(pcie->cdns_pcie);
+	printk("### %s: %d\n", __func__, __LINE__);
 	if (ret < 0)
 		return ret;
 
@@ -677,6 +695,7 @@ static int j721e_pcie_resume_noirq(struct device *dev)
 		struct cdns_pcie_rc *rc = cdns_pcie_to_rc(cdns_pcie);
 
 		ret = clk_prepare_enable(pcie->refclk);
+	printk("### %s: %d\n", __func__, __LINE__);
 		if (ret < 0)
 			return ret;
 
@@ -690,9 +709,12 @@ static int j721e_pcie_resume_noirq(struct device *dev)
 		if (pcie->reset_gpio) {
 			msleep(PCIE_T_PVPERL_MS);
 			gpiod_set_value_cansleep(pcie->reset_gpio, 1);
+	printk("### %s: %d\n", __func__, __LINE__);
 		}
+	printk("### %s: %d\n", __func__, __LINE__);
 
 		ret = cdns_pcie_host_link_setup(rc);
+	printk("### %s: %d\n", __func__, __LINE__);
 		if (ret < 0) {
 			clk_disable_unprepare(pcie->refclk);
 			return ret;
@@ -706,8 +728,10 @@ static int j721e_pcie_resume_noirq(struct device *dev)
 			rc->avail_ib_bar[bar] = true;
 
 		ret = cdns_pcie_host_init(rc);
+	printk("### %s: %d\n", __func__, __LINE__);
 		if (ret) {
 			clk_disable_unprepare(pcie->refclk);
+	printk("### %s: %d\n", __func__, __LINE__);
 			return ret;
 		}
 	}

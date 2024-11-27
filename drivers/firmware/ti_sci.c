@@ -140,6 +140,14 @@ struct ti_sci_info {
 	u64 fw_caps;
 	/* protected by ti_sci_list_mutex */
 	int users;
+
+	struct list_head clk_parenting_entries;
+	bool in_suspend;
+};
+
+struct ti_sci_clk_parenting_entry {
+	struct list_head link;
+	u32 dev_id, clk_id, parent_id;
 };
 
 #define cl_to_ti_sci_info(c)	container_of(c, struct ti_sci_info, cl)
@@ -1321,6 +1329,31 @@ static int ti_sci_cmd_clk_set_parent(const struct ti_sci_handle *handle,
 	resp = (struct ti_sci_msg_hdr *)xfer->xfer_buf;
 
 	ret = ti_sci_is_response_ack(resp) ? 0 : -ENODEV;
+
+	if (ret == 0 && !info->in_suspend) {
+		struct ti_sci_clk_parenting_entry *entry;
+		bool done = false;
+
+		list_for_each_entry(entry, &info->clk_parenting_entries, link) {
+			if (entry->dev_id == dev_id && entry->clk_id == clk_id) {
+				entry->parent_id = parent_id;
+				done = true;
+				break;
+			}
+		}
+
+		if (!done) {
+			entry = devm_kzalloc(dev, sizeof(*entry), GFP_KERNEL);
+			if (!entry) {
+				dev_warn(dev, "failed allocating clk parent entry\n");
+			} else {
+				entry->dev_id = dev_id;
+				entry->clk_id = clk_id;
+				entry->parent_id = parent_id;
+				list_add_tail(&entry->link, &info->clk_parenting_entries);
+			}
+		}
+	}
 
 fail:
 	dev_info(dev, "%s(): ret=%d dev=%u clk=%u parent=%u\n",
@@ -3770,12 +3803,15 @@ static bool ti_sci_check_lpm_region(void)
 static int __maybe_unused ti_sci_suspend(struct device *dev)
 {
 	const struct ti_sci_desc *desc = device_get_match_data(dev);
+	struct ti_sci_info *info = dev_get_drvdata(dev);
 
 	if (pm_suspend_target_state == PM_SUSPEND_MEM &&
 	    desc->lpm_region && !ti_sci_check_lpm_region()) {
 		dev_err(dev, "lpm region is required for suspend to ram but is not provided\n");
 		return -EINVAL;
 	}
+
+	info->in_suspend = true;
 
 	return 0;
 }
@@ -3785,6 +3821,7 @@ static int __maybe_unused ti_sci_resume_noirq(struct device *dev)
 	const struct ti_sci_desc *desc = device_get_match_data(dev);
 	struct ti_sci_info *info = dev_get_drvdata(dev);
 	struct ti_sci_msg_req_manage_irq *irq_desc;
+	struct ti_sci_clk_parenting_entry *entry;
 	struct ti_sci_irq *irq;
 	struct list_head *this;
 	int ret = 0;
@@ -3796,15 +3833,27 @@ static int __maybe_unused ti_sci_resume_noirq(struct device *dev)
 	list_for_each(this, &info->irqs.list) {
 		irq = list_entry(this, struct ti_sci_irq, list);
 		irq_desc = &irq->desc;
-		ret |=	ti_sci_manage_irq(&info->handle, irq_desc->valid_params,
+		ret = ti_sci_manage_irq(&info->handle, irq_desc->valid_params,
 					  irq_desc->src_id, irq_desc->src_index,
 					  irq_desc->dst_id, irq_desc->dst_host_irq,
 					  irq_desc->ia_id, irq_desc->vint,
 					  irq_desc->global_event, irq_desc->vint_status_bit,
 					  irq_desc->secondary_host, TI_SCI_MSG_SET_IRQ);
+
+		if (ret)
+			return ret;
 	}
 
-	return ret;
+	list_for_each_entry(entry, &info->clk_parenting_entries, link) {
+		ret = ti_sci_cmd_clk_set_parent(&info->handle, entry->dev_id,
+						entry->clk_id, entry->parent_id);
+		if (ret) {
+			dev_warn(info->dev, "failed restoring clk %u:%u parent to %u: %d\n",
+				 entry->dev_id, entry->clk_id, entry->parent_id, ret);
+		}
+	}
+
+	return 0;
 }
 
 static const struct dev_pm_ops ti_sci_pm_ops = {
@@ -3872,6 +3921,8 @@ static int ti_sci_probe(struct platform_device *pdev)
 
 	info->dev = dev;
 	info->desc = desc;
+	INIT_LIST_HEAD(&info->clk_parenting_entries);
+	info->in_suspend = false;
 	ret = of_property_read_u32(dev->of_node, "ti,host-id", &h_id);
 	/* if the property is not present in DT, use a default from desc */
 	if (ret < 0) {

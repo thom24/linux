@@ -1456,6 +1456,52 @@ static int wiz_get_lane_phy_types(struct device *dev, struct wiz *wiz)
 	return 0;
 }
 
+static int wiz_get_regfield_value(struct device *dev, struct regmap_field *field)
+{
+	unsigned int val;
+	int ret;
+
+	ret = regmap_field_read(field, &val);
+	if (ret)
+		dev_err(dev, "Failed to read regmap_field\n");
+
+	return val;
+}
+static void whiz_dump_registers(struct wiz *wiz){
+	int i;
+	dev_info(wiz->dev, "por_en = 0x%x\n", wiz_get_regfield_value(wiz->dev, wiz->por_en));
+	dev_info(wiz->dev, "phy_reset_n = 0x%x\n", wiz_get_regfield_value(wiz->dev, wiz->phy_reset_n));
+	dev_info(wiz->dev, "phy_en_refclk = 0x%x\n", wiz_get_regfield_value(wiz->dev, wiz->phy_en_refclk));
+	for (i = 0; i < WIZ_MAX_LANES; i++) {
+		dev_info(wiz->dev, "-- i=%d\n", i);
+		dev_info(wiz->dev, "p_enable = 0x%x\n", wiz_get_regfield_value(wiz->dev, wiz->p_enable[i]));
+		dev_info(wiz->dev, "p_align = 0x%x\n", wiz_get_regfield_value(wiz->dev, wiz->p_align[i]));
+		dev_info(wiz->dev, "p_raw_auto_start = 0x%x\n", wiz_get_regfield_value(wiz->dev, wiz->p_raw_auto_start[i]));
+		dev_info(wiz->dev, "p_standard_mode = 0x%x\n", wiz_get_regfield_value(wiz->dev, wiz->p_standard_mode[i]));
+		dev_info(wiz->dev, "p_mac_div_sel0 = 0x%x\n", wiz_get_regfield_value(wiz->dev, wiz->p_mac_div_sel0[i]));
+		dev_info(wiz->dev, "p_mac_div_sel1 = 0x%x\n", wiz_get_regfield_value(wiz->dev, wiz->p_mac_div_sel1[i]));
+		dev_info(wiz->dev, "p0_fullrt_div = 0x%x\n", wiz_get_regfield_value(wiz->dev, wiz->p0_fullrt_div[i]));
+		dev_info(wiz->dev, "p0_mac_src_sel = 0x%x\n", wiz_get_regfield_value(wiz->dev, wiz->p0_mac_src_sel[i]));
+		dev_info(wiz->dev, "p0_rxfclk_sel = 0x%x\n", wiz_get_regfield_value(wiz->dev, wiz->p0_rxfclk_sel[i]));
+		dev_info(wiz->dev, "p0_refclk_sel = 0x%x\n", wiz_get_regfield_value(wiz->dev, wiz->p0_refclk_sel[i]));
+	}
+	dev_info(wiz->dev, "pma_cmn_refclk_int_mode = 0x%x\n", wiz_get_regfield_value(wiz->dev, wiz->pma_cmn_refclk_int_mode));
+	dev_info(wiz->dev, "pma_cmn_refclk1_int_mode = 0x%x\n", wiz_get_regfield_value(wiz->dev, wiz->pma_cmn_refclk1_int_mode));
+	dev_info(wiz->dev, "pma_cmn_refclk_mode = 0x%x\n", wiz_get_regfield_value(wiz->dev, wiz->pma_cmn_refclk_mode));
+	dev_info(wiz->dev, "pma_cmn_refclk_dig_div = 0x%x\n", wiz_get_regfield_value(wiz->dev, wiz->pma_cmn_refclk_dig_div));
+	dev_info(wiz->dev, "pma_cmn_refclk1_dig_div = 0x%x\n", wiz_get_regfield_value(wiz->dev, wiz->pma_cmn_refclk1_dig_div));
+
+	for (i = 0; i < WIZ_MUX_NUM_CLOCKS; i++)
+		dev_info(wiz->dev, "mux_sel_field = 0x%x\n", wiz_get_regfield_value(wiz->dev, wiz->mux_sel_field[i]));
+
+	for (i = 0; i < WIZ_DIV_NUM_CLOCKS_16G; i++)
+		dev_info(wiz->dev, "div_sel_field = 0x%x\n", wiz_get_regfield_value(wiz->dev, wiz->div_sel_field[i]));
+
+	dev_info(wiz->dev, "typec_ln10_swap = 0x%x\n", wiz_get_regfield_value(wiz->dev, wiz->typec_ln10_swap));
+	dev_info(wiz->dev, "typec_ln23_swap = 0x%x\n", wiz_get_regfield_value(wiz->dev, wiz->typec_ln23_swap));
+	dev_info(wiz->dev, "sup_legacy_clk_override = 0x%x\n", wiz_get_regfield_value(wiz->dev, wiz->sup_legacy_clk_override));
+}
+
 static int wiz_probe(struct platform_device *pdev)
 {
 	struct reset_controller_dev *phy_reset_dev;
@@ -1640,6 +1686,8 @@ static int wiz_probe(struct platform_device *pdev)
 	wiz->serdes_pdev = serdes_pdev;
 
 	of_node_put(child_node);
+
+	whiz_dump_registers(wiz);
 	return 0;
 
 err_wiz_init:
@@ -1689,6 +1737,7 @@ static int wiz_resume_noirq(struct device *dev)
 		goto err_wiz_init;
 	}
 
+	whiz_dump_registers(wiz);
 	return 0;
 
 err_wiz_init:

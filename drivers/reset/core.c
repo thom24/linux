@@ -366,6 +366,7 @@ int reset_control_reset(struct reset_control *rstc)
 	if (!rstc->rcdev->ops->reset)
 		return -ENOTSUPP;
 
+	printk("--- %s: %d: %s\n", __func__, __LINE__, rcdev_name(rstc->rcdev));
 	if (rstc->shared) {
 		if (WARN_ON(atomic_read(&rstc->deassert_count) != 0))
 			return -EINVAL;
@@ -476,6 +477,7 @@ int reset_control_assert(struct reset_control *rstc)
 	if (reset_control_is_array(rstc))
 		return reset_control_array_assert(rstc_to_array(rstc));
 
+	printk("--- %s: %d: %s id=%d\n", __func__, __LINE__, rcdev_name(rstc->rcdev), rstc->id);
 	if (rstc->shared) {
 		if (WARN_ON(atomic_read(&rstc->triggered_count) != 0))
 			return -EINVAL;
@@ -564,6 +566,7 @@ int reset_control_deassert(struct reset_control *rstc)
 	if (reset_control_is_array(rstc))
 		return reset_control_array_deassert(rstc_to_array(rstc));
 
+	printk("--- %s: %d: %s id=%d\n", __func__, __LINE__, rcdev_name(rstc->rcdev), rstc->id);
 	if (rstc->shared) {
 		if (WARN_ON(atomic_read(&rstc->triggered_count) != 0))
 			return -EINVAL;

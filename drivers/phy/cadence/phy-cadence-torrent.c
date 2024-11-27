@@ -455,6 +455,9 @@ struct cdns_regmap_cdb_context {
 	u8 reg_offset_shift;
 };
 
+static void dump_cmn_vals(struct regmap *regmap, struct cdns_torrent_phy *cdns_phy);
+static void dump_restore_cmn_vals(struct regmap *regmap, struct cdns_torrent_phy *cdns_phy);
+
 static const struct cdns_torrent_vals *cdns_torrent_get_tbl_vals(const struct cdns_torrent_vals_table *tbl,
 								 enum cdns_torrent_ref_clk refclk0,
 								 enum cdns_torrent_ref_clk refclk1,
@@ -2167,6 +2170,9 @@ static int cdns_torrent_regfield_init(struct cdns_torrent_phy *cdns_phy)
 		dev_err(dev, "cmn_cdiag_refclk_ovrd_4 reg field init failed\n");
 		return PTR_ERR(field);
 	}
+
+	dump_cmn_vals(cdns_phy->regmap_common_cdb, cdns_phy);
+
 	cdns_phy->cmn_cdiag_refclk_ovrd_4 = field;
 
 	regmap = cdns_phy->regmap_phy_pma_common_cdb;
@@ -2309,6 +2315,7 @@ static int cdns_torrent_regmap_init(struct cdns_torrent_phy *cdns_phy)
 	return 0;
 }
 
+
 static int cdns_torrent_phy_init(struct phy *phy)
 {
 	struct cdns_torrent_phy *cdns_phy = dev_get_drvdata(phy->dev.parent);
@@ -2371,6 +2378,9 @@ static int cdns_torrent_phy_init(struct phy *phy)
 			regmap_write(regmap, reg_pairs[i].off,
 				     reg_pairs[i].val);
 	}
+
+	dump_cmn_vals(cdns_phy->regmap_common_cdb, cdns_phy);
+	dump_restore_cmn_vals(cdns_phy->regmap_common_cdb, cdns_phy);
 
 	xcvr_diag_vals = cdns_torrent_get_tbl_vals(&init_data->xcvr_diag_vals_tbl,
 						   CLK_ANY, CLK_ANY,
@@ -5445,6 +5455,48 @@ static const struct cdns_torrent_data ti_j7200_map_torrent = {
 		.num_entries = ARRAY_SIZE(ti_j7200_rx_ln_vals_entries),
 	},
 };
+
+static void dump_cmn_vals(struct regmap *regmap, struct cdns_torrent_phy *cdns_phy)
+{
+	int i, ret;
+	unsigned int toto;
+
+	for (i = 0; i < pcie_usb_link_cmn_vals.num_regs; i++) {
+		ret = regmap_read(regmap, pcie_usb_link_cmn_vals.reg_pairs[i].off, &toto);
+		if (ret)
+			dev_err(cdns_phy->dev, "%s: %d: failed to read pcie_usb_link_cmn_vals.reg_pairs[%d]\n", __func__, __LINE__, i);
+		else
+			dev_info(cdns_phy->dev, "### %s: %d: reg_pairs[%d]=%x\n", __func__, __LINE__, i, toto);
+	}
+	dev_info(cdns_phy->dev, "###############################################\n");
+}
+
+static void dump_restore_cmn_vals(struct regmap *regmap, struct cdns_torrent_phy *cdns_phy)
+{
+	int i, ret;
+	unsigned int toto;
+	unsigned int vals[] = { 0x00, 0x601, 0x400, 0x400};
+
+	for (i = 0; i < pcie_usb_link_cmn_vals.num_regs; i++) {
+		ret = regmap_read(regmap, pcie_usb_link_cmn_vals.reg_pairs[i].off, &toto);
+		if (ret)
+			dev_err(cdns_phy->dev, "%s: %d: failed to read pcie_usb_link_cmn_vals.reg_pairs[%d]\n", __func__, __LINE__, i);
+		else
+			dev_info(cdns_phy->dev, "### %s: %d: reg_pairs[%d]=%x\n", __func__, __LINE__, i, toto);
+
+		regmap_write(regmap, pcie_usb_link_cmn_vals.reg_pairs[i].off, vals[i]);
+		if (ret)
+			dev_err(cdns_phy->dev, "%s: %d: failed to write pcie_usb_link_cmn_vals.reg_pairs[%d]=%d\n", __func__, __LINE__, i, vals[i]);
+
+		ret = regmap_read(regmap, pcie_usb_link_cmn_vals.reg_pairs[i].off, &toto);
+		if (ret)
+			dev_err(cdns_phy->dev, "%s: %d: failed to read pcie_usb_link_cmn_vals.reg_pairs[%d]\n", __func__, __LINE__, i);
+		else
+			dev_info(cdns_phy->dev, "### %s: %d: reg_pairs[%d]=%x\n", __func__, __LINE__, i, toto);
+	}
+	dev_info(cdns_phy->dev, "###############################################\n");
+}
+
 
 static const struct of_device_id cdns_torrent_phy_of_match[] = {
 	{

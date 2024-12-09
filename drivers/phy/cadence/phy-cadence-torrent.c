@@ -2333,6 +2333,7 @@ static int cdns_torrent_phy_init(struct phy *phy)
 	u32 num_regs;
 	int i, j;
 	unsigned int toto;
+	int ret;
 
 	dev_info(cdns_phy->dev, "%s: %d\n", __func__, __LINE__);
 
@@ -2391,9 +2392,18 @@ static int cdns_torrent_phy_init(struct phy *phy)
 		num_regs = xcvr_diag_vals->num_regs;
 		for (i = 0; i < inst->num_lanes; i++) {
 			regmap = cdns_phy->regmap_tx_lane_cdb[i + inst->mlane];
-			for (j = 0; j < num_regs; j++)
+			for (j = 0; j < num_regs; j++) {
+				ret = regmap_read(regmap, reg_pairs[j].off, &toto);
+				if (ret)
+					dev_err(cdns_phy->dev, "%s: %d: regmap read error\n", __func__, __LINE__);
+				dev_info(cdns_phy->dev, "### regmap_tx_lane_cdb[%d][%d] = %x\n", i + inst->mlane, j, toto);
 				regmap_write(regmap, reg_pairs[j].off,
 					     reg_pairs[j].val);
+				ret = regmap_read(regmap, reg_pairs[j].off, &toto);
+				if (ret)
+					dev_err(cdns_phy->dev, "%s: %d: regmap read error\n", __func__, __LINE__);
+				dev_info(cdns_phy->dev, "### regmap_tx_lane_cdb[%d][%d] = %x\n", i + inst->mlane, j, toto);
+			}
 		}
 	}
 
@@ -2406,9 +2416,18 @@ static int cdns_torrent_phy_init(struct phy *phy)
 		reg_pairs = pcs_cmn_vals->reg_pairs;
 		num_regs = pcs_cmn_vals->num_regs;
 		regmap = cdns_phy->regmap_phy_pcs_common_cdb;
-		for (i = 0; i < num_regs; i++)
+		for (i = 0; i < num_regs; i++) {
+			ret = regmap_read(regmap, reg_pairs[i].off, &toto);
+			if (ret)
+				dev_err(cdns_phy->dev, "%s: %d: regmap read error\n", __func__, __LINE__);
+			dev_info(cdns_phy->dev, "### egmap_phy_pcs_common_cdb[%d] = %x\n", i, toto);
 			regmap_write(regmap, reg_pairs[i].off,
 				     reg_pairs[i].val);
+			ret = regmap_read(regmap, reg_pairs[i].off, &toto);
+			if (ret)
+				dev_err(cdns_phy->dev, "%s: %d: regmap read error\n", __func__, __LINE__);
+			dev_info(cdns_phy->dev, "### egmap_phy_pcs_common_cdb[%d] = %x\n", i, toto);
+		}
 	}
 
 	/* PHY PMA common registers configurations */
@@ -2420,9 +2439,21 @@ static int cdns_torrent_phy_init(struct phy *phy)
 		reg_pairs = phy_pma_cmn_vals->reg_pairs;
 		num_regs = phy_pma_cmn_vals->num_regs;
 		regmap = cdns_phy->regmap_phy_pma_common_cdb;
-		for (i = 0; i < num_regs; i++)
+		for (i = 0; i < num_regs; i++) {
+			ret = regmap_read(regmap, reg_pairs[i].off, &toto);
+			if (ret)
+				dev_err(cdns_phy->dev, "%s: %d: regmap read error\n", __func__, __LINE__);
+			dev_info(cdns_phy->dev, "### regmap_phy_pma_common_cdb[%d] = %x\n", i, toto);
+
 			regmap_write(regmap, reg_pairs[i].off,
 				     reg_pairs[i].val);
+
+			ret = regmap_read(regmap, reg_pairs[i].off, &toto);
+			if (ret)
+				dev_err(cdns_phy->dev, "%s: %d: regmap read error\n", __func__, __LINE__);
+			dev_info(cdns_phy->dev, "### regmap_phy_pma_common_cdb[%d] = %x\n", i, toto);
+
+		}
 	}
 
 	/* PMA common registers configurations */
@@ -2434,9 +2465,20 @@ static int cdns_torrent_phy_init(struct phy *phy)
 		reg_pairs = cmn_vals->reg_pairs;
 		num_regs = cmn_vals->num_regs;
 		regmap = cdns_phy->regmap_common_cdb;
-		for (i = 0; i < num_regs; i++)
+		for (i = 0; i < num_regs; i++) {
+			ret = regmap_read(regmap, reg_pairs[i].off, &toto);
+			if (ret)
+				dev_err(cdns_phy->dev, "%s: %d: regmap read error\n", __func__, __LINE__);
+			dev_info(cdns_phy->dev, "### regmap_common_cdb;[%d] = %x\n", i, toto);
+
 			regmap_write(regmap, reg_pairs[i].off,
 				     reg_pairs[i].val);
+
+			ret = regmap_read(regmap, reg_pairs[i].off, &toto);
+			if (ret)
+				dev_err(cdns_phy->dev, "%s: %d: regmap read error\n", __func__, __LINE__);
+			dev_info(cdns_phy->dev, "### regmap_common_cdb;[%d] = %x\n", i, toto);
+		}
 	}
 
 	/* PMA TX lane registers configurations */
@@ -2449,9 +2491,20 @@ static int cdns_torrent_phy_init(struct phy *phy)
 		num_regs = tx_ln_vals->num_regs;
 		for (i = 0; i < inst->num_lanes; i++) {
 			regmap = cdns_phy->regmap_tx_lane_cdb[i + inst->mlane];
-			for (j = 0; j < num_regs; j++)
+			for (j = 0; j < num_regs; j++) {
+				ret = regmap_read(regmap, reg_pairs[j].off, &toto);
+				if (ret)
+					dev_err(cdns_phy->dev, "%s: %d: regmap read error\n", __func__, __LINE__);
+				dev_info(cdns_phy->dev, "### regmap_common_cdb[%d][%d] = %x\n", j, i, toto);
+
 				regmap_write(regmap, reg_pairs[j].off,
 					     reg_pairs[j].val);
+
+				ret = regmap_read(regmap, reg_pairs[j].off, &toto);
+				if (ret)
+					dev_err(cdns_phy->dev, "%s: %d: regmap read error\n", __func__, __LINE__);
+				dev_info(cdns_phy->dev, "### regmap_common_cdb[%d][%d] = %x\n", j, i, toto);
+			}
 		}
 	}
 
@@ -2465,9 +2518,18 @@ static int cdns_torrent_phy_init(struct phy *phy)
 		num_regs = rx_ln_vals->num_regs;
 		for (i = 0; i < inst->num_lanes; i++) {
 			regmap = cdns_phy->regmap_rx_lane_cdb[i + inst->mlane];
-			for (j = 0; j < num_regs; j++)
+			for (j = 0; j < num_regs; j++) {
+				ret = regmap_read(regmap, reg_pairs[j].off, &toto);
+				if (ret)
+					dev_err(cdns_phy->dev, "%s: %d: regmap read error\n", __func__, __LINE__);
+				dev_info(cdns_phy->dev, "### regmap_rx_lane_cdb[%d][%d] = %x\n", j, i, toto);
 				regmap_write(regmap, reg_pairs[j].off,
 					     reg_pairs[j].val);
+				ret = regmap_read(regmap, reg_pairs[j].off, &toto);
+				if (ret)
+					dev_err(cdns_phy->dev, "%s: %d: regmap read error\n", __func__, __LINE__);
+				dev_info(cdns_phy->dev, "### regmap_rx_lane_cdb[%d][%d] = %x\n", j, i, toto);
+			}
 		}
 	}
 
@@ -3112,7 +3174,7 @@ static int cdns_torrent_phy_probe(struct platform_device *pdev)
 		if (ret)
 			goto put_lnk_rst;
 	} else
-		printk("### %s: %d: already_configured\n", __func__, __LINE__);
+//		printk("### %s: %d: already_configured\n", __func__, __LINE__);
 
 	phy_provider = devm_of_phy_provider_register(dev, of_phy_simple_xlate);
 	if (IS_ERR(phy_provider)) {
@@ -3210,21 +3272,25 @@ static int cdns_torrent_phy_resume_noirq(struct device *dev)
 	struct cdns_torrent_phy *cdns_phy = dev_get_drvdata(dev);
 	int node = cdns_phy->nsubnodes;
 	int ret, i;
+	mdelay(100);
 
 	ret = cdns_torrent_clk(cdns_phy);
 	if (ret)
 		return ret;
 
+	mdelay(100);
 	/* Enable APB */
 	printk("### %s: %d\n", __func__, __LINE__);
 	reset_control_deassert(cdns_phy->apb_rst);
 
+	mdelay(100);
 	if (cdns_phy->nsubnodes > 1) {
 		ret = cdns_torrent_phy_configure_multilink(cdns_phy);
 		if (ret)
 			goto put_lnk_rst;
 	}
 
+	mdelay(100);
 	return 0;
 
 put_lnk_rst:
@@ -5476,6 +5542,8 @@ static void dump_restore_cmn_vals(struct regmap *regmap, struct cdns_torrent_phy
 	int i, ret;
 	unsigned int toto;
 	unsigned int vals[] = { 0x00, 0x601, 0x400, 0x400};
+
+	//unsigned int vals[] = { 0x00, 0x000, 0x000, 0x000};
 
 	for (i = 0; i < pcie_usb_link_cmn_vals.num_regs; i++) {
 		ret = regmap_read(regmap, pcie_usb_link_cmn_vals.reg_pairs[i].off, &toto);

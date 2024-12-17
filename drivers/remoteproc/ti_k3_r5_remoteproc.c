@@ -1337,6 +1337,7 @@ static int k3_r5_rproc_suspend(struct k3_r5_rproc *kproc)
 	}
 
 	kproc->rproc->state = RPROC_SUSPENDED;
+	mbox_free_channel(kproc->mbox);
 
 out:
 	return ret;
@@ -1374,6 +1375,12 @@ static int k3_r5_rproc_resume(struct k3_r5_rproc *kproc)
 				goto out;
 			}
 		}
+	}
+
+	ret = k3_r5_rproc_request_mbox(kproc->rproc);
+	if (ret < 0) {
+		ret = -EBUSY;
+		goto out;
 	}
 
 	ret = k3_r5_rproc_configure_mode(kproc);

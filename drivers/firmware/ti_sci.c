@@ -82,6 +82,7 @@ struct ti_sci_xfers_info {
  * @restore_irqs: Set to true if allocated irqs shall be restored at resume
  * @lpm_region: Set to true if a reserved memory region is needed for suspend to
  *		ram
+ * @io_isolation: Set to true if io_isolation calls are supported.
  */
 struct ti_sci_desc {
 	u8 default_host_id;
@@ -90,6 +91,7 @@ struct ti_sci_desc {
 	int max_msg_size;
 	bool restore_irqs;
 	bool lpm_region;
+	bool io_isolation;
 };
 
 /**
@@ -3815,12 +3817,16 @@ static int __maybe_unused ti_sci_suspend(struct device *dev)
 
 static int __maybe_unused ti_sci_suspend_noirq(struct device *dev)
 {
+	const struct ti_sci_desc *desc = device_get_match_data(dev);
 	struct ti_sci_info *info = dev_get_drvdata(dev);
 	int ret = 0;
 
-	ret = ti_sci_cmd_set_io_isolation(&info->handle, TISCI_MSG_VALUE_IO_ENABLE);
-	if (ret)
-		return ret;
+	if (desc->io_isolation) {
+		ret = ti_sci_cmd_set_io_isolation(&info->handle,
+						  TISCI_MSG_VALUE_IO_ENABLE);
+		if (ret)
+			return ret;
+	}
 
 	return 0;
 }
@@ -3861,9 +3867,12 @@ static int __maybe_unused ti_sci_resume_noirq(struct device *dev)
 			return ret;
 	}
 
-	ret = ti_sci_cmd_set_io_isolation(&info->handle, TISCI_MSG_VALUE_IO_DISABLE);
-	if (ret)
-		return ret;
+	if (desc->io_isolation) {
+		ret = ti_sci_cmd_set_io_isolation(&info->handle,
+						  TISCI_MSG_VALUE_IO_DISABLE);
+		if (ret)
+			return ret;
+	}
 
 	ret = ti_sci_msg_cmd_lpm_wake_reason(&info->handle, &source, &time, &pin, &mode);
 	/* Do not fail to resume on error as the wake reason is not critical */
@@ -3890,6 +3899,7 @@ static const struct ti_sci_desc ti_sci_pmmc_k2g_desc = {
 	/* Limited by MBOX_TX_QUEUE_LEN. K2G can handle upto 128 messages! */
 	.max_msgs = 20,
 	.max_msg_size = 64,
+	.io_isolation = true,
 };
 
 /* Description for AM654 */
@@ -3900,6 +3910,7 @@ static const struct ti_sci_desc ti_sci_pmmc_am654_desc = {
 	/* Limited by MBOX_TX_QUEUE_LEN. K2G can handle upto 128 messages! */
 	.max_msgs = 20,
 	.max_msg_size = 60,
+	.io_isolation = true,
 };
 
 /* Description for J7200 */

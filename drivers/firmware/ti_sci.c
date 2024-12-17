@@ -83,6 +83,7 @@ struct ti_sci_xfers_info {
  * @lpm_region: Set to true if a reserved memory region is needed for suspend to
  *		ram
  * @io_isolation: Set to true if io_isolation calls are supported.
+ * @wakeup_reason: Set to true if wakeup_reason message is supported.
  */
 struct ti_sci_desc {
 	u8 default_host_id;
@@ -92,6 +93,7 @@ struct ti_sci_desc {
 	bool restore_irqs;
 	bool lpm_region;
 	bool io_isolation;
+	bool wakeup_reason;
 };
 
 /**
@@ -3296,7 +3298,8 @@ static void ti_sci_setup_ops(struct ti_sci_info *info)
 
 	if (info->fw_caps & MSG_FLAG_CAPS_LPM_DM_MANAGED) {
 		pr_debug("detected DM managed LPM in fw_caps\n");
-		pmops->lpm_wake_reason = ti_sci_msg_cmd_lpm_wake_reason;
+		if (info->desc->wakeup_reason)
+			pmops->lpm_wake_reason = ti_sci_msg_cmd_lpm_wake_reason;
 		pmops->set_device_constraint = ti_sci_cmd_set_device_constraint;
 		pmops->set_latency_constraint = ti_sci_cmd_set_latency_constraint;
 	}
@@ -3874,11 +3877,17 @@ static int __maybe_unused ti_sci_resume_noirq(struct device *dev)
 			return ret;
 	}
 
-	ret = ti_sci_msg_cmd_lpm_wake_reason(&info->handle, &source, &time, &pin, &mode);
-	/* Do not fail to resume on error as the wake reason is not critical */
-	if (!ret)
-		dev_info(dev, "ti_sci: wakeup source:0x%x, pin:0x%x, mode:0x%x\n",
-			 source, pin, mode);
+	if (desc->wakeup_reason) {
+		ret = ti_sci_msg_cmd_lpm_wake_reason(&info->handle, &source,
+						     &time, &pin, &mode);
+		/*
+		 * Do not fail to resume on error as
+		 * the wake reason is not critical
+		 */
+		if (!ret)
+			dev_info(dev, "ti_sci: wakeup source:0x%x, pin:0x%x, mode:0x%x\n",
+				 source, pin, mode);
+	}
 
 	return 0;
 }
@@ -3900,6 +3909,7 @@ static const struct ti_sci_desc ti_sci_pmmc_k2g_desc = {
 	.max_msgs = 20,
 	.max_msg_size = 64,
 	.io_isolation = true,
+	.wakeup_reason = true,
 };
 
 /* Description for AM654 */
@@ -3911,6 +3921,7 @@ static const struct ti_sci_desc ti_sci_pmmc_am654_desc = {
 	.max_msgs = 20,
 	.max_msg_size = 60,
 	.io_isolation = true,
+	.wakeup_reason = true,
 };
 
 /* Description for J7200 */

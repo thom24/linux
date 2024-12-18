@@ -2040,6 +2040,11 @@ static void genpd_lock_init(struct generic_pm_domain *genpd)
 	}
 }
 
+static void genpd_provider_release(struct device *dev)
+{
+	/* nothing to be done here */
+}
+
 /**
  * pm_genpd_init - Initialize a generic I/O PM domain object.
  * @genpd: PM domain object to initialize.
@@ -2106,6 +2111,7 @@ int pm_genpd_init(struct generic_pm_domain *genpd,
 		return ret;
 
 	device_initialize(&genpd->dev);
+	genpd->dev.release = genpd_provider_release;
 	dev_set_name(&genpd->dev, "%s", genpd->name);
 
 	mutex_lock(&gpd_list_lock);

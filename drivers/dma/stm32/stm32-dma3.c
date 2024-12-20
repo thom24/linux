@@ -534,8 +534,8 @@ static int stm32_dma3_lli_pool_create(struct platform_device *pdev, struct stm32
 			/* Keep original base */
 		}
 
-		dev_notice(&pdev->dev, "LLI gen_pool truncated (%ldKiB instead of %lldKiB)\n",
-			   size / SZ_1K, rmem->size / SZ_1K);
+		dev_notice(&pdev->dev, "LLI gen_pool truncated (%zuKiB instead of %lluKiB)\n",
+			   size / SZ_1K, (long long unsigned int) rmem->size / SZ_1K);
 	}
 
 	ddata->gen_pool = devm_gen_pool_create(&pdev->dev, ilog2(sizeof(struct stm32_dma3_hwdesc)),
@@ -552,7 +552,7 @@ static int stm32_dma3_lli_pool_create(struct platform_device *pdev, struct stm32
 		goto no_specific_pool;
 	}
 
-	dev_info(&pdev->dev, "created LLI gen_pool at %pap, size %ldKiB\n",
+	dev_info(&pdev->dev, "created LLI gen_pool at %pap, size %zuKiB\n",
 		 &base, gen_pool_size(ddata->gen_pool) / SZ_1K);
 
 no_specific_pool:

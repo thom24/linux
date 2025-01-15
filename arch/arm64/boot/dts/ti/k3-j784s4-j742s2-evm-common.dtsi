@@ -1400,7 +1400,7 @@
 };
 
 &serdes1 {
-	status = "okay";
+	status = "disabled";
 
 	serdes1_pcie0_link: phy@0 {
 		reg = <0>;
@@ -1413,11 +1413,11 @@
 };
 
 &serdes_wiz1 {
-	status = "okay";
+	status = "disabled";
 };
 
 &pcie0_rc {
-	status = "okay";
+	status = "disabled";
 	reset-gpios = <&exp1 6 GPIO_ACTIVE_HIGH>;
 	phys = <&serdes1_pcie0_link>;
 	phy-names = "pcie-phy";

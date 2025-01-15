@@ -5165,8 +5165,10 @@ int dwc2_hsotg_suspend(struct dwc2_hsotg *hsotg)
 {
 	unsigned long flags;
 
-	if (hsotg->lx_state != DWC2_L0)
+	if (hsotg->lx_state != DWC2_L0) {
+		hsotg->gadget_off_for_suspend = false;
 		return 0;
+	}
 
 	if (hsotg->driver) {
 		int ep;
@@ -5189,6 +5191,8 @@ int dwc2_hsotg_suspend(struct dwc2_hsotg *hsotg)
 		}
 	}
 
+	hsotg->gadget_off_for_suspend = true;
+
 	return 0;
 }
 
@@ -5196,7 +5200,7 @@ int dwc2_hsotg_resume(struct dwc2_hsotg *hsotg)
 {
 	unsigned long flags;
 
-	if (hsotg->lx_state == DWC2_L2)
+	if (!hsotg->gadget_off_for_suspend)
 		return 0;
 
 	if (hsotg->driver) {

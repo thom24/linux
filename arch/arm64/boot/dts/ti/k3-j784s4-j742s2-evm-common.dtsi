@@ -1263,7 +1263,7 @@
 };
 
 &serdes0 {
-	status = "okay";
+	status = "disabled";
 
 	serdes0_pcie1_link: phy@0 {
 		reg = <0>;
@@ -1276,7 +1276,7 @@
 };
 
 &serdes_wiz0 {
-	status = "okay";
+	status = "disabled";
 };
 
 &usb_serdes_mux {
@@ -1392,7 +1392,7 @@
 };
 
 &pcie1_rc {
-	status = "okay";
+	status = "disabled";
 	num-lanes = <4>;
 	reset-gpios = <&exp1 2 GPIO_ACTIVE_HIGH>;
 	phys = <&serdes0_pcie1_link>;

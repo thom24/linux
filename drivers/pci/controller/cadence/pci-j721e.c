@@ -672,7 +672,8 @@ static int j721e_pcie_resume_noirq(struct device *dev)
 
 	printk("### %s: %d\n", __func__, __LINE__);
 
-	printk("### READL=0x%x\n", readl(pcie->intd_cfg_base));
+//	printk("### user_cfg_base READL=0x%x\n", readl(pcie->user_cfg_base));
+//	printk("### intd_cfg_base READL=0x%x\n", readl(pcie->intd_cfg_base));
 
 	ret = j721e_pcie_ctrl_init(pcie);
 	printk("### %s: %d\n", __func__, __LINE__);

@@ -212,13 +212,13 @@ static int stm_drm_platform_probe(struct platform_device *pdev)
 	ret = dma_set_coherent_mask(dev, DMA_BIT_MASK(32));
 	if (ret) {
 		dev_err(dev, "Failed to set DMA segment mask\n");
-		goto err_suspend;
+		return ret;
 	}
 
 	ret = dma_set_max_seg_size(dev, DMA_BIT_MASK(32));
 	if (ret) {
 		dev_err(dev, "Failed to set DMA segment size\n");
-		goto err_suspend;
+		return ret;
 	}
 
 	ddev = drm_dev_alloc(&drv_driver, dev);

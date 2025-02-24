@@ -62,7 +62,7 @@ static int stm32_lptim_set_enable_state(struct stm32_lptim_cnt *priv,
 		return 0;
 	}
 
-	ret = clk_enable(priv->clk);
+	ret = pm_runtime_resume_and_get(priv->dev);
 	if (ret)
 		goto disable_cnt;
 
@@ -87,10 +87,6 @@ static int stm32_lptim_set_enable_state(struct stm32_lptim_cnt *priv,
 	if (ret)
 		goto disable_clk;
 
-	ret = pm_runtime_resume_and_get(priv->dev);
-	if (ret < 0)
-		goto disable_clk;
-
 	priv->enabled = true;
 
 	/* Start LP timer in continuous mode */
@@ -98,7 +94,7 @@ static int stm32_lptim_set_enable_state(struct stm32_lptim_cnt *priv,
 				  STM32_LPTIM_CNTSTRT, STM32_LPTIM_CNTSTRT);
 
 disable_clk:
-	clk_disable(priv->clk);
+	pm_runtime_put_sync_suspend(priv->dev);
 disable_cnt:
 	regmap_write(priv->regmap, STM32_LPTIM_CR, 0);
 

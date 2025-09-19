@@ -822,7 +822,10 @@ static int dwc2_debugfs_runtime_suspend(struct device *dev)
 		 * put it back to suspend state, as there won't be a suspend IRQ here.
 		 */
 		if (hsotg->suspended_from == USB_STATE_CONFIGURED) {
+#if IS_ENABLED(CONFIG_USB_DWC2_PERIPHERAL) || \
+	IS_ENABLED(CONFIG_USB_DWC2_DUAL_ROLE)
 			usb_gadget_set_state(&hsotg->gadget, USB_STATE_SUSPENDED);
+#endif
 			call_gadget(hsotg, suspend);
 		}
 	}

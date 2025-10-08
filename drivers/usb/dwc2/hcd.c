@@ -5817,6 +5817,8 @@ int dwc2_host_enter_partial_power_down(struct dwc2_hsotg *hsotg)
 	hsotg->lx_state = DWC2_L2;
 	hsotg->bus_suspended = true;
 
+	pm_runtime_put(hsotg->dev);
+	hsotg->rpm_suspended = true;
 	dev_dbg(hsotg->dev, "Entering host partial power down completed.\n");
 
 	return ret;
@@ -5842,6 +5844,15 @@ int dwc2_host_exit_partial_power_down(struct dwc2_hsotg *hsotg,
 	u32 hprt0;
 
 	dev_dbg(hsotg->dev, "Exiting host partial power down started.\n");
+
+	/*
+	 * Rely on rpm_suspended, to resume once, as gadget/host partial_power_down
+	 * routines may get called several times, with rem_wakeup.
+	 */
+	if (hsotg->rpm_suspended) {
+		pm_runtime_get(hsotg->dev);
+		hsotg->rpm_suspended = false;
+	}
 
 	pcgcctl = dwc2_readl(hsotg, PCGCTL);
 	pcgcctl &= ~PCGCTL_STOPPCLK;
@@ -5942,6 +5953,9 @@ void dwc2_host_enter_clock_gating(struct dwc2_hsotg *hsotg)
 
 	hsotg->bus_suspended = true;
 	hsotg->lx_state = DWC2_L2;
+
+	pm_runtime_put(hsotg->dev);
+	hsotg->rpm_suspended = true;
 }
 
 /**
@@ -5958,6 +5972,15 @@ void dwc2_host_exit_clock_gating(struct dwc2_hsotg *hsotg, int rem_wakeup)
 	u32 pcgctl;
 
 	dev_dbg(hsotg->dev, "Exiting host clock gating.\n");
+
+	if (hsotg->rpm_suspended) {
+		/*
+		 * Rely on rpm_suspended, to resume once, as gadget/host exit_clock_gating
+		 * routines may get called several times, with rem_wakeup.
+		 */
+		pm_runtime_get(hsotg->dev);
+		hsotg->rpm_suspended = false;
+	}
 
 	/* Clear the Gate hclk. */
 	pcgctl = dwc2_readl(hsotg, PCGCTL);

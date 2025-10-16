@@ -1861,6 +1861,8 @@ static int ti_sci_msg_cmd_lpm_wake_reason(const struct ti_sci_handle *handle,
 	struct device *dev;
 	int ret = 0;
 
+	return 0;
+
 	if (IS_ERR(handle))
 		return PTR_ERR(handle);
 	if (!handle)

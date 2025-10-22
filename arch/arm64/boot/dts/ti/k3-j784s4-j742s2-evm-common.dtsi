@@ -1299,11 +1299,11 @@
 };
 
 &serdes_wiz4 {
-	status = "okay";
+	status = "disabled";
 };
 
 &serdes4 {
-	status = "okay";
+	status = "disabled";
 	serdes4_dp_link: phy@0 {
 		reg = <0>;
 		cdns,num-lanes = <4>;

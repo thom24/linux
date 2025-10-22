@@ -1263,7 +1263,7 @@
 };
 
 &serdes0 {
-	status = "disabled";
+	status = "okay";
 
 	serdes0_pcie1_link: phy@0 {
 		reg = <0>;
@@ -1276,7 +1276,7 @@
 };
 
 &serdes_wiz0 {
-	status = "disabled";
+	status = "okay";
 };
 
 &usb_serdes_mux {
@@ -1392,7 +1392,7 @@
 };
 
 &pcie1_rc {
-	status = "disabled";
+	status = "okay";
 	num-lanes = <4>;
 	reset-gpios = <&exp1 2 GPIO_ACTIVE_HIGH>;
 	phys = <&serdes0_pcie1_link>;
@@ -1400,7 +1400,7 @@
 };
 
 &serdes1 {
-	status = "okay";
+	status = "disabled";
 
 	serdes1_pcie0_link: phy@0 {
 		reg = <0>;
@@ -1413,11 +1413,11 @@
 };
 
 &serdes_wiz1 {
-	status = "okay";
+	status = "disabled";
 };
 
 &pcie0_rc {
-	status = "okay";
+	status = "disabled";
 	reset-gpios = <&exp1 6 GPIO_ACTIVE_HIGH>;
 	phys = <&serdes1_pcie0_link>;
 	phy-names = "pcie-phy";

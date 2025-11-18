@@ -9,6 +9,7 @@
 #define pr_fmt(fmt) "%s: " fmt, __func__
 
 #include <linux/bitmap.h>
+#include <linux/clk.h>
 #include <linux/cpu.h>
 #include <linux/debugfs.h>
 #include <linux/export.h>
@@ -3901,6 +3902,8 @@ static int ti_sci_resume_noirq(struct device *dev)
 				if (ret)
 					return ret;
 			}
+
+			clk_restore_context();
 		}
 		break;
 	default:

@@ -3717,28 +3717,28 @@ static int ti_sci_suspend(struct device *dev)
 	int i, ret;
 
 	if (info->fw_caps & MSG_FLAG_CAPS_LPM_DM_MANAGED) {
-		for_each_possible_cpu(i) {
-			cpu_dev = get_cpu_device(i);
-			val = dev_pm_qos_read_value(cpu_dev, DEV_PM_QOS_RESUME_LATENCY);
-			if (val != PM_QOS_RESUME_LATENCY_NO_CONSTRAINT) {
-				cpu_lat = max(cpu_lat, val);
-				cpu_dev_max = cpu_dev;
-			}
-		}
-		if (cpu_dev_max) {
-			/*
-			 * PM QoS latency unit is usecs, device manager uses msecs.
-			 * Convert to msecs and round down for device manager.
-			 */
-			cpu_lat_ms = cpu_lat / USEC_PER_MSEC;
-			dev_dbg(cpu_dev_max, "%s: sending max CPU latency=%u ms\n", __func__,
-				cpu_lat_ms);
-			ret = ti_sci_cmd_set_latency_constraint(&info->handle,
-								cpu_lat_ms,
-								TISCI_MSG_CONSTRAINT_SET);
-			if (ret)
-				return ret;
-		}
+		//for_each_possible_cpu(i) {
+		//	cpu_dev = get_cpu_device(i);
+		//	val = dev_pm_qos_read_value(cpu_dev, DEV_PM_QOS_RESUME_LATENCY);
+		//	if (val != PM_QOS_RESUME_LATENCY_NO_CONSTRAINT) {
+		//		cpu_lat = max(cpu_lat, val);
+		//		cpu_dev_max = cpu_dev;
+		//	}
+		//}
+		//if (cpu_dev_max) {
+		//	/*
+		//	 * PM QoS latency unit is usecs, device manager uses msecs.
+		//	 * Convert to msecs and round down for device manager.
+		//	 */
+		//	cpu_lat_ms = cpu_lat / USEC_PER_MSEC;
+		//	dev_dbg(cpu_dev_max, "%s: sending max CPU latency=%u ms\n", __func__,
+		//		cpu_lat_ms);
+		//	ret = ti_sci_cmd_set_latency_constraint(&info->handle,
+		//						cpu_lat_ms,
+		//						TISCI_MSG_CONSTRAINT_SET);
+		//	if (ret)
+		//		return ret;
+		//}
 	}
 
 	ret = ti_sci_prepare_system_suspend(info);

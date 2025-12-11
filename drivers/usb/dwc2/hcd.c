@@ -3318,7 +3318,8 @@ int dwc2_port_suspend(struct dwc2_hsotg *hsotg, u16 windex)
 
 	if (!hsotg->rpm_suspended) {
 		spin_unlock_irqrestore(&hsotg->lock, flags);
-		dwc2_host_enter_lp(hsotg);
+		hsotg->rpm_suspended = true;
+		pm_runtime_put_sync(hsotg->dev);
 		spin_lock_irqsave(&hsotg->lock, flags);
 	}
 
@@ -4359,7 +4360,8 @@ static int _dwc2_hcd_suspend(struct usb_hcd *hcd)
 
 	if (!hsotg->rpm_suspended) {
 		spin_unlock_irqrestore(&hsotg->lock, flags);
-		dwc2_host_enter_lp(hsotg);
+		hsotg->rpm_suspended = true;
+		pm_runtime_put_sync(hsotg->dev);
 		spin_lock_irqsave(&hsotg->lock, flags);
 
 		/* After entering suspend, hardware is not accessible */
@@ -5773,8 +5775,6 @@ static int dwc2_host_enter_partial_power_down(struct dwc2_hsotg *hsotg)
 	hsotg->lx_state = DWC2_L2;
 	hsotg->bus_suspended = true;
 
-	pm_runtime_put(hsotg->dev);
-	hsotg->rpm_suspended = true;
 	dev_dbg(hsotg->dev, "Entering host partial power down completed.\n");
 
 	return ret;
@@ -5919,9 +5919,6 @@ static void dwc2_host_enter_clock_gating(struct dwc2_hsotg *hsotg)
 
 	hsotg->bus_suspended = true;
 	hsotg->lx_state = DWC2_L2;
-
-	pm_runtime_put(hsotg->dev);
-	hsotg->rpm_suspended = true;
 }
 
 /**

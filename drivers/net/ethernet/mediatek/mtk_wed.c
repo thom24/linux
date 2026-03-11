@@ -1406,6 +1406,8 @@ mtk_wed_rro_hw_init(struct mtk_wed_device *dev)
 
 	wed_w32(dev, MTK_WED_RROQM_RST_IDX, 0);
 	wed_w32(dev, MTK_WED_RROQM_MIOD_CTRL2, MTK_WED_MIOD_CNT - 1);
+	if (dev->wlan.hw_rro)
+		wed_set(dev, MTK_WED_RROQM_GLO_CFG, MTK_WED_RROQM_GLO_CFG_BYPASS);
 	wed_set(dev, MTK_WED_CTRL, MTK_WED_CTRL_RX_RRO_QM_EN);
 }
 
@@ -1433,6 +1435,10 @@ mtk_wed_route_qm_hw_init(struct mtk_wed_device *dev)
 			FIELD_PREP(MTK_WED_RTQM_ENQ_CFG_TXDMAD_FPORT,
 				   0x3 + dev->hw->index));
 	}
+
+	if (dev->wlan.hw_rro)
+		wed_set(dev, MTK_WED_RTQM_IGRS1_CFG0,
+			FIELD_PREP(MTK_WED_RTQM_IGRS1_CFG0_DEST_FORCE, 0x2));
 	/* enable RX_ROUTE_QM */
 	wed_set(dev, MTK_WED_CTRL, MTK_WED_CTRL_RX_ROUTE_QM_EN);
 }

@@ -529,6 +529,8 @@ struct mtk_wdma_desc {
 #define MTK_WED_RTQM_IGRS0_I2H_PKT_CNT(_n)		(0xb2c + (_n) * 0x4)
 #define MTK_WED_RTQM_IGRS0_FDROP_CNT			0xb34
 
+#define MTK_WED_RTQM_IGRS1_CFG0				0xb3c
+#define MTK_WED_RTQM_IGRS1_CFG0_DEST_FORCE		GENMASK(2, 0)
 #define MTK_WED_RTQM_IGRS1_I2HW_DMAD_CNT		0xb44
 #define MTK_WED_RTQM_IGRS1_I2H_DMAD_CNT(_n)		(0xb48 + (_n) * 0x4)
 #define MTK_WED_RTQM_IGRS1_I2HW_PKT_CNT			0xb50
@@ -574,6 +576,7 @@ struct mtk_wdma_desc {
 #define MTK_WED_RTQM_DEQ_ERR_CNT			0xbec
 
 #define MTK_WED_RROQM_GLO_CFG				0xc04
+#define MTK_WED_RROQM_GLO_CFG_BYPASS			BIT(24)
 #define MTK_WED_RROQM_RST_IDX				0xc08
 #define MTK_WED_RROQM_RST_IDX_MIOD			BIT(0)
 #define MTK_WED_RROQM_RST_IDX_FDBK			BIT(4)

@@ -42,6 +42,9 @@
  */
 #define OPTEE_DEFAULT_MAX_NOTIF_VALUE	255
 
+/* This value should be larger than max interrupt ID notified by secure world */
+#define OPTEE_MAX_IT 32
+
 typedef void (optee_invoke_fn)(unsigned long, unsigned long, unsigned long,
 				unsigned long, unsigned long, unsigned long,
 				unsigned long, unsigned long,
@@ -138,6 +141,7 @@ struct optee_pcpu {
  * @notif_pcpu_wq:	workqueue for per cpu asynchronous notification or NULL
  * @notif_pcpu_work:	work for per cpu asynchronous notification
  * @notif_cpuhp_state:	CPU hotplug state assigned for pcpu interrupt management
+ * @domain:		interrupt domain registered by OP-TEE driver
  */
 struct optee_smc {
 	optee_invoke_fn *invoke_fn;
@@ -148,6 +152,7 @@ struct optee_smc {
 	struct workqueue_struct *notif_pcpu_wq;
 	struct work_struct notif_pcpu_work;
 	unsigned int notif_cpuhp_state;
+	struct irq_domain *domain;
 };
 
 /**
@@ -245,6 +250,7 @@ struct optee_ops {
  * @rpmb_scan_bus_work:		workq to for an RPMB device and to scan optee
  *				bus and register RPMB dependent optee drivers
  * @revision:			OP-TEE OS revision
+ * @itr_notif:		True if OP-TEE offers interrupt notification
  */
 struct optee {
 	struct tee_device *supp_teedev;
@@ -270,6 +276,7 @@ struct optee {
 	bool in_kernel_rpmb_routing;
 	struct work_struct scan_bus_work;
 	struct work_struct rpmb_scan_bus_work;
+	bool itr_notif;
 };
 
 /**

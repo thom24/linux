@@ -2354,7 +2354,6 @@ int uart_suspend_port(struct uart_driver *drv, struct uart_port *uport)
 			guard(uart_port_lock_irq)(uport);
 			uport->ops->stop_rx(uport);
 		}
-		device_set_awake_path(uport->dev);
 		return 0;
 	}
 

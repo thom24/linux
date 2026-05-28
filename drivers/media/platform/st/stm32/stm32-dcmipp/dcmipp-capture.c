@@ -751,14 +751,6 @@ static void dcmipp_capture_stop_streaming(struct vb2_queue *vq)
 	int ret;
 	u32 status;
 
-	ret = v4l2_subdev_disable_streams(vcap->s_subdev,
-					  vcap->s_subdev_pad_nb, BIT_ULL(0));
-	if (ret)
-		dev_warn(vcap->dev, "Failed to disable stream\n");
-
-	/* Stop the media pipeline */
-	media_pipeline_stop(vcap->vdev.entity.pads);
-
 	/* Disable interruptions */
 	spin_lock(&vcap->vdev.v4l2_dev->lock);
 	reg_clear(vcap, DCMIPP_CMIER, DCMIPP_CMIER_PxALL(vcap->pipe_id));
@@ -781,6 +773,14 @@ static void dcmipp_capture_stop_streaming(struct vb2_queue *vq)
 
 	/* Clear any pending interrupts */
 	reg_write(vcap, DCMIPP_CMFCR, DCMIPP_CMIER_PxALL(vcap->pipe_id));
+
+	ret = v4l2_subdev_disable_streams(vcap->s_subdev,
+					  vcap->s_subdev_pad_nb, BIT_ULL(0));
+	if (ret)
+		dev_warn(vcap->dev, "Failed to disable stream\n");
+
+	/* Stop the media pipeline */
+	media_pipeline_stop(vcap->vdev.entity.pads);
 
 	spin_lock_irq(&vcap->irqlock);
 

@@ -66,6 +66,12 @@ static const struct cgbc_i2c_platform_data cgbc_i2c_pm_pdata = {
 	.cgbc_bus_id = 4,
 };
 
+static const struct cgbc_i2c_platform_data cgbc_i2c_virtual_pdata = {
+	.name  = "Congatec Virtual I2C adapter",
+	.cgbc_bus_id = 3,
+	.fixed_freq = true,
+};
+
 static const struct mfd_cell cgbc_devs[] = {
 	{ .name = "cgbc-backlight" },
 	{ .name = "cgbc-gpio" },
@@ -79,6 +85,11 @@ static const struct mfd_cell cgbc_devs[] = {
 		.name = "cgbc-i2c",
 		.platform_data = &cgbc_i2c_pm_pdata,
 		.pdata_size = sizeof(cgbc_i2c_pm_pdata),
+	},
+	{
+		.name = "cgbc-i2c",
+		.platform_data = &cgbc_i2c_virtual_pdata,
+		.pdata_size = sizeof(cgbc_i2c_virtual_pdata),
 	},
 	{ .name = "cgbc-wdt" },
 };

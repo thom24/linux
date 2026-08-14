@@ -138,7 +138,7 @@ static const struct software_node cgbc_bios_ram_node = {
 	.properties = cgbc_bios_ram_props,
 };
 
-static const struct i2c_board_info cgbc_i2c_virtual_bus_board_info[] = {
+static const struct i2c_board_info cgbc_i2c_i2cv_board_info[] = {
 	{
 		.type = "24c01",
 		.addr = 0x40,
@@ -183,22 +183,47 @@ static const struct i2c_board_info cgbc_i2c_virtual_bus_board_info[] = {
 	}
 };
 
-static const struct cgbc_i2c_platform_data cgbc_i2c_gp_pdata = {
-	.name = "Congatec General Purpose I2C adapter",
+static const struct cgbc_i2c_platform_data cgbc_i2c_i2c0_pdata = {
+	.name = "cgbc-i2c0",
 	.cgbc_bus_id = 0,
 };
 
-static const struct cgbc_i2c_platform_data cgbc_i2c_pm_pdata = {
-	.name  = "Congatec Power Management I2C adapter",
+static const struct cgbc_i2c_platform_data cgbc_i2c_smb1_pdata = {
+	.name = "cgbc-smb1",
+	.cgbc_bus_id = 1,
+};
+
+static const struct cgbc_i2c_platform_data cgbc_i2c_smb0_pdata = {
+	.name = "cgbc-smb0",
+	.cgbc_bus_id = 2,
+};
+
+static const struct cgbc_i2c_platform_data cgbc_i2c_i2cv_pdata = {
+	.name  = "cgbc-i2cv",
+	.cgbc_bus_id = 3,
+	.fixed_freq = true,
+	.devices = cgbc_i2c_i2cv_board_info,
+	.nb_devices = ARRAY_SIZE(cgbc_i2c_i2cv_board_info),
+};
+
+static const struct cgbc_i2c_platform_data cgbc_i2c_ddc0_pdata = {
+	.name  = "cgbc-ddc0",
 	.cgbc_bus_id = 4,
 };
 
-static const struct cgbc_i2c_platform_data cgbc_i2c_virtual_pdata = {
-	.name  = "Congatec Virtual I2C adapter",
-	.cgbc_bus_id = 3,
-	.fixed_freq = true,
-	.devices = cgbc_i2c_virtual_bus_board_info,
-	.nb_devices = ARRAY_SIZE(cgbc_i2c_virtual_bus_board_info),
+static const struct cgbc_i2c_platform_data cgbc_i2c_eoob_pdata = {
+	.name  = "cgbc-eoob",
+	.cgbc_bus_id = 5,
+};
+
+static const struct cgbc_i2c_platform_data cgbc_i2c_ipmb_pdata = {
+	.name  = "cgbc-ipmb",
+	.cgbc_bus_id = 6,
+};
+
+static const struct cgbc_i2c_platform_data cgbc_i2c_smb2_pdata = {
+	.name = "cgbc-smb2",
+	.cgbc_bus_id = 7,
 };
 
 static const struct mfd_cell cgbc_devs[] = {
@@ -207,18 +232,43 @@ static const struct mfd_cell cgbc_devs[] = {
 	{ .name = "cgbc-hwmon" },
 	{
 		.name = "cgbc-i2c",
-		.platform_data = &cgbc_i2c_gp_pdata,
-		.pdata_size = sizeof(cgbc_i2c_gp_pdata),
+		.platform_data = &cgbc_i2c_i2c0_pdata,
+		.pdata_size = sizeof(cgbc_i2c_i2c0_pdata),
 	},
 	{
 		.name = "cgbc-i2c",
-		.platform_data = &cgbc_i2c_pm_pdata,
-		.pdata_size = sizeof(cgbc_i2c_pm_pdata),
+		.platform_data = &cgbc_i2c_smb1_pdata,
+		.pdata_size = sizeof(cgbc_i2c_smb1_pdata),
 	},
 	{
 		.name = "cgbc-i2c",
-		.platform_data = &cgbc_i2c_virtual_pdata,
-		.pdata_size = sizeof(cgbc_i2c_virtual_pdata),
+		.platform_data = &cgbc_i2c_smb0_pdata,
+		.pdata_size = sizeof(cgbc_i2c_smb0_pdata),
+	},
+	{
+		.name = "cgbc-i2c",
+		.platform_data = &cgbc_i2c_i2cv_pdata,
+		.pdata_size = sizeof(cgbc_i2c_i2cv_pdata),
+	},
+	{
+		.name = "cgbc-i2c",
+		.platform_data = &cgbc_i2c_ddc0_pdata,
+		.pdata_size = sizeof(cgbc_i2c_ddc0_pdata),
+	},
+	{
+		.name = "cgbc-i2c",
+		.platform_data = &cgbc_i2c_eoob_pdata,
+		.pdata_size = sizeof(cgbc_i2c_eoob_pdata),
+	},
+	{
+		.name = "cgbc-i2c",
+		.platform_data = &cgbc_i2c_ipmb_pdata,
+		.pdata_size = sizeof(cgbc_i2c_ipmb_pdata),
+	},
+	{
+		.name = "cgbc-i2c",
+		.platform_data = &cgbc_i2c_smb2_pdata,
+		.pdata_size = sizeof(cgbc_i2c_smb2_pdata),
 	},
 	{ .name = "cgbc-wdt" },
 };

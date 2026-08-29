@@ -223,7 +223,7 @@ mtk_flow_get_dsa_port(struct net_device **dev, u16 *push_vid)
 static int
 mtk_flow_set_output_device(struct mtk_eth *eth, struct mtk_foe_entry *foe,
 			   struct net_device *dev, const u8 *dest_mac,
-			   int *wed_index)
+			   int *wed_index, u16 *wcid)
 {
 	struct mtk_wdma_info info = {};
 	struct mtk_mac *mac;
@@ -251,6 +251,7 @@ mtk_flow_set_output_device(struct mtk_eth *eth, struct mtk_foe_entry *foe,
 			pse_port = 3;
 		}
 		*wed_index = info.wdma_idx;
+		*wcid = info.wcid;
 		goto out;
 	}
 
@@ -318,6 +319,7 @@ mtk_flow_offload_replace(struct mtk_eth *eth, struct flow_cls_offload *f,
 	int offload_type = 0;
 	int wed_index = -1;
 	u16 addr_type = 0;
+	u16 wcid = 0;
 	u8 l4proto = 0;
 	int err = 0;
 	int i;
@@ -527,7 +529,7 @@ mtk_flow_offload_replace(struct mtk_eth *eth, struct flow_cls_offload *f,
 	}
 
 	err = mtk_flow_set_output_device(eth, &foe, odev, data.eth.h_dest,
-					 &wed_index);
+					 &wed_index, &wcid);
 	if (err)
 		return err;
 
@@ -550,7 +552,9 @@ mtk_flow_offload_replace(struct mtk_eth *eth, struct flow_cls_offload *f,
 	entry->cookie = f->cookie;
 	memcpy(&entry->data, &foe, sizeof(entry->data));
 	entry->wed_index = wed_index;
+	entry->rx_wed_index = -1;
 	entry->ppe_index = ppe_index;
+	entry->wcid = wcid;
 
 	err = mtk_foe_entry_commit(eth->ppe[entry->ppe_index], entry);
 	if (err < 0)
@@ -639,6 +643,66 @@ int mtk_flow_offload_cmd(struct mtk_eth *eth, struct flow_cls_offload *cls,
 	mutex_unlock(&mtk_flow_offload_mutex);
 
 	return err;
+}
+
+/* @rx is set for an entry that carries the frames of the station */
+static bool
+mtk_flow_entry_wcid_match(struct mtk_flow_entry *entry, int wed_index, u16 wcid,
+			  bool *rx)
+{
+	*rx = false;
+	if (entry->wed_index == wed_index && entry->wcid == wcid)
+		return true;
+
+	*rx = true;
+	return entry->rx_wed_index == wed_index && entry->rx_wcid == wcid;
+}
+
+static void
+mtk_flow_offload_walk_wcid(struct mtk_eth *eth, int wed_index, u16 wcid,
+			   void (*fn)(struct mtk_ppe *ppe,
+				      struct mtk_flow_entry *entry, bool rx,
+				      void *arg),
+			   void *arg)
+{
+	struct mtk_flow_entry *entry;
+	struct rhashtable_iter iter;
+	bool rx;
+
+	mutex_lock(&mtk_flow_offload_mutex);
+
+	rhashtable_walk_enter(&eth->flow_table, &iter);
+	rhashtable_walk_start(&iter);
+	while ((entry = rhashtable_walk_next(&iter)) != NULL) {
+		if (IS_ERR(entry)) {
+			if (PTR_ERR(entry) != -EAGAIN)
+				break;
+			continue;
+		}
+
+		if (!mtk_flow_entry_wcid_match(entry, wed_index, wcid, &rx))
+			continue;
+
+		fn(eth->ppe[entry->ppe_index], entry, rx, arg);
+	}
+	rhashtable_walk_stop(&iter);
+	rhashtable_walk_exit(&iter);
+
+	mutex_unlock(&mtk_flow_offload_mutex);
+}
+
+static void
+mtk_flow_entry_unbind_cb(struct mtk_ppe *ppe, struct mtk_flow_entry *entry,
+			 bool rx, void *arg)
+{
+	mtk_foe_entry_unbind(ppe, entry, rx, arg);
+}
+
+void mtk_flow_offload_unbind_wcid(struct mtk_eth *eth, int wed_index, u16 wcid,
+				  struct mtk_flow_match *match)
+{
+	mtk_flow_offload_walk_wcid(eth, wed_index, wcid,
+				   mtk_flow_entry_unbind_cb, match);
 }
 
 static int

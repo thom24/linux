@@ -1576,6 +1576,8 @@ int mtk_gmac_usxgmii_path_setup(struct mtk_eth *eth, int mac_id);
 int mtk_eth_offload_init(struct mtk_eth *eth, u8 id);
 int mtk_eth_setup_tc(struct net_device *dev, enum tc_setup_type type,
 		     void *type_data);
+void mtk_flow_offload_unbind_wcid(struct mtk_eth *eth, int wed_index, u16 wcid,
+				  struct mtk_flow_match *match);
 int mtk_flow_offload_cmd(struct mtk_eth *eth, struct flow_cls_offload *cls,
 			 int ppe_index);
 void mtk_flow_offload_cleanup(struct mtk_eth *eth, struct list_head *list);

@@ -8,6 +8,17 @@
 #include <linux/bitfield.h>
 #include <linux/rhashtable.h>
 
+struct cfg80211_flow_info;
+
+/*
+ * Selects hardware entries by their flow, every entry when @fn is NULL. @rx is
+ * set for an entry that carries the frames of the station.
+ */
+struct mtk_flow_match {
+	bool (*fn)(const struct cfg80211_flow_info *info, bool rx, void *arg);
+	void *arg;
+};
+
 #define MTK_PPE_ENTRIES_SHIFT		4
 #define MTK_PPE_ENTRIES			(1024 << MTK_PPE_ENTRIES_SHIFT)
 #define MTK_PPE_HASH_MASK		(MTK_PPE_ENTRIES - 1)
@@ -303,8 +314,11 @@ struct mtk_flow_entry {
 	};
 	u8 type;
 	s8 wed_index;
+	s8 rx_wed_index;
 	u8 ppe_index;
 	u16 hash;
+	u16 wcid;
+	u16 rx_wcid;
 	struct mtk_foe_entry data;
 	struct rhash_head node;
 	unsigned long cookie;
@@ -357,10 +371,12 @@ int mtk_ppe_stop(struct mtk_ppe *ppe);
 int mtk_ppe_prepare_reset(struct mtk_ppe *ppe);
 struct mtk_foe_accounting *mtk_ppe_mib_entry_read(struct mtk_ppe *ppe, u16 index);
 
-void __mtk_ppe_check_skb(struct mtk_ppe *ppe, struct sk_buff *skb, u16 hash);
+void __mtk_ppe_check_skb(struct mtk_ppe *ppe, struct sk_buff *skb, u16 hash,
+			 int rx_wed_index, u16 rx_wcid);
 
 static inline void
-mtk_ppe_check_skb(struct mtk_ppe *ppe, struct sk_buff *skb, u16 hash)
+mtk_ppe_check_skb(struct mtk_ppe *ppe, struct sk_buff *skb, u16 hash,
+		  int rx_wed_index, u16 rx_wcid)
 {
 	u16 now, diff;
 
@@ -376,7 +392,7 @@ mtk_ppe_check_skb(struct mtk_ppe *ppe, struct sk_buff *skb, u16 hash)
 		return;
 
 	ppe->foe_check_time[hash] = now;
-	__mtk_ppe_check_skb(ppe, skb, hash);
+	__mtk_ppe_check_skb(ppe, skb, hash, rx_wed_index, rx_wcid);
 }
 
 int mtk_foe_entry_prepare(struct mtk_eth *eth, struct mtk_foe_entry *entry,
@@ -405,6 +421,8 @@ int mtk_foe_entry_set_queue(struct mtk_eth *eth, struct mtk_foe_entry *entry,
 			    unsigned int queue);
 int mtk_foe_entry_commit(struct mtk_ppe *ppe, struct mtk_flow_entry *entry);
 void mtk_foe_entry_clear(struct mtk_ppe *ppe, struct mtk_flow_entry *entry);
+void mtk_foe_entry_unbind(struct mtk_ppe *ppe, struct mtk_flow_entry *entry,
+			  bool rx, const struct mtk_flow_match *match);
 int mtk_ppe_debugfs_init(struct mtk_ppe *ppe, int index);
 void mtk_foe_entry_get_stats(struct mtk_ppe *ppe, struct mtk_flow_entry *entry,
 			     int *idle);

@@ -2603,7 +2603,7 @@ static int mtk_poll_rx(struct napi_struct *napi, int budget,
 		}
 
 		if (reason == MTK_PPE_CPU_REASON_HIT_UNBIND_RATE_REACHED)
-			mtk_ppe_check_skb(eth->ppe[ppe_idx], skb, hash);
+			mtk_ppe_check_skb(eth->ppe[ppe_idx], skb, hash, -1, 0);
 
 		skb_record_rx_queue(skb, 0);
 		napi_gro_receive(napi, skb);

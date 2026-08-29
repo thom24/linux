@@ -185,6 +185,8 @@ void mtk_wed_add_hw(struct device_node *np, struct mtk_eth *eth,
 void mtk_wed_exit(void);
 int mtk_wed_flow_add(int index);
 void mtk_wed_flow_remove(int index);
+int mtk_wed_flow_prio(int index, u16 wcid, const struct cfg80211_flow_info *info,
+		      int dscp, u8 *prio);
 void mtk_wed_fe_reset(void);
 void mtk_wed_fe_reset_complete(void);
 #else
@@ -204,6 +206,13 @@ static inline int mtk_wed_flow_add(int index)
 }
 static inline void mtk_wed_flow_remove(int index)
 {
+}
+
+static inline int mtk_wed_flow_prio(int index, u16 wcid,
+				    const struct cfg80211_flow_info *info,
+				    int dscp, u8 *prio)
+{
+	return 0;
 }
 
 static inline void mtk_wed_fe_reset(void)

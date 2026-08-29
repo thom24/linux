@@ -51,6 +51,9 @@
 static struct mtk_wed_hw *hw_list[3];
 static DEFINE_MUTEX(hw_lock);
 
+/* Used by the flow priority query from the receive path, without hw_lock */
+static struct mtk_wed_device __rcu *flow_prio_dev[ARRAY_SIZE(hw_list)];
+
 struct mtk_wed_flow_block_priv {
 	struct mtk_wed_hw *hw;
 	struct net_device *dev;
@@ -522,6 +525,8 @@ mtk_wed_assign(struct mtk_wed_device *dev)
 
 out:
 	hw->wed_dev = dev;
+	rcu_assign_pointer(flow_prio_dev[hw->index], dev);
+
 	return hw;
 }
 
@@ -1137,6 +1142,9 @@ __mtk_wed_detach(struct mtk_wed_device *dev)
 {
 	struct mtk_wed_hw *hw = dev->hw;
 
+	rcu_assign_pointer(flow_prio_dev[hw->index], NULL);
+	synchronize_rcu();
+
 	mtk_wed_deinit(dev);
 
 	mtk_wdma_rx_reset(dev);
@@ -1170,6 +1178,24 @@ __mtk_wed_detach(struct mtk_wed_device *dev)
 	module_put(THIS_MODULE);
 
 	hw->wed_dev = NULL;
+}
+
+int mtk_wed_flow_prio(int index, u16 wcid, const struct cfg80211_flow_info *info,
+		      int dscp, u8 *prio)
+{
+	struct mtk_wed_device *dev;
+	int ret = 0;
+
+	if (index < 0 || index >= ARRAY_SIZE(flow_prio_dev))
+		return 0;
+
+	rcu_read_lock();
+	dev = rcu_dereference(flow_prio_dev[index]);
+	if (dev && dev->wlan.flow_prio)
+		ret = dev->wlan.flow_prio(dev, wcid, info, dscp, prio);
+	rcu_read_unlock();
+
+	return ret;
 }
 
 static void
@@ -1971,7 +1997,7 @@ mtk_wed_wdma_tx_ring_setup(struct mtk_wed_device *dev, int idx, int size,
 
 static void
 mtk_wed_ppe_check(struct mtk_wed_device *dev, struct sk_buff *skb,
-		  u32 reason, u32 hash)
+		  u32 reason, u32 hash, u16 wcid)
 {
 	struct mtk_eth *eth = dev->hw->eth;
 	struct ethhdr *eh;
@@ -1985,7 +2011,22 @@ mtk_wed_ppe_check(struct mtk_wed_device *dev, struct sk_buff *skb,
 	skb_set_mac_header(skb, 0);
 	eh = eth_hdr(skb);
 	skb->protocol = eh->h_proto;
-	mtk_ppe_check_skb(eth->ppe[dev->hw->index], skb, hash);
+	mtk_ppe_check_skb(eth->ppe[dev->hw->index], skb, hash, dev->hw->index,
+			  wcid);
+}
+
+static void
+mtk_wed_flow_flush(struct mtk_wed_device *dev, u16 wcid,
+		   bool (*match)(const struct cfg80211_flow_info *info,
+				 bool rx, void *arg),
+		   void *arg)
+{
+	struct mtk_flow_match m = {
+		.fn = match,
+		.arg = arg,
+	};
+
+	mtk_flow_offload_unbind_wcid(dev->hw->eth, dev->hw->index, wcid, &m);
 }
 
 static void
@@ -2825,6 +2866,7 @@ void mtk_wed_add_hw(struct device_node *np, struct mtk_eth *eth,
 		.rro_rx_ring_setup = mtk_wed_rro_rx_ring_setup,
 		.msdu_pg_rx_ring_setup = mtk_wed_msdu_pg_rx_ring_setup,
 		.ind_rx_ring_setup = mtk_wed_ind_rx_ring_setup,
+		.flow_flush = mtk_wed_flow_flush,
 	};
 	struct device_node *eth_np = eth->dev->of_node;
 	struct platform_device *pdev;

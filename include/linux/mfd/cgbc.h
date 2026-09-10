@@ -57,4 +57,12 @@ struct cgbc_i2c_platform_data {
 	struct i2c_board_info const *devices;
 };
 
+/**
+ * struct cgbc_gpio_platform_data - Platform data of the CGBC GPIO driver
+ * @ngpio:	the number of GPIOs handled by the Board Controller
+ */
+struct cgbc_gpio_platform_data {
+	int ngpio;
+};
+
 #endif /*_LINUX_MFD_CGBC_H_*/

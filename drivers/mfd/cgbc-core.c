@@ -200,9 +200,17 @@ static const struct cgbc_i2c_platform_data cgbc_i2c_i2cv_pdata = {
 	.nb_devices = ARRAY_SIZE(cgbc_i2c_i2cv_board_info),
 };
 
+static const struct cgbc_gpio_platform_data cgbc_gpio_pdata = {
+	.ngpio = 14,
+};
+
 static const struct mfd_cell cgbc_devs[] = {
 	MFD_CELL_NAME("cgbc-backlight"),
-	MFD_CELL_NAME("cgbc-gpio"),
+	{
+		.name = "cgbc-gpio",
+		.platform_data = &cgbc_gpio_pdata,
+		.pdata_size = sizeof(cgbc_gpio_pdata),
+	},
 	MFD_CELL_NAME("cgbc-hwmon"),
 	{
 		.name = "cgbc-i2c",

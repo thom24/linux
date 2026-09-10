@@ -17,6 +17,7 @@
 #include <linux/mfd/cgbc.h>
 #include <linux/mfd/core.h>
 #include <linux/module.h>
+#include <linux/platform_data/gpio/gpio-cgbc.h>
 #include <linux/platform_data/i2c-cgbc.h>
 #include <linux/platform_device.h>
 #include <linux/property.h>
@@ -201,9 +202,17 @@ static const struct cgbc_i2c_platform_data cgbc_i2c_i2cv_pdata = {
 	.nb_devices = ARRAY_SIZE(cgbc_i2c_i2cv_board_info),
 };
 
+static const struct cgbc_gpio_platform_data cgbc_gpio_pdata = {
+	.ngpio = 14,
+};
+
 static const struct mfd_cell cgbc_devs[] = {
 	{ .name = "cgbc-backlight" },
-	{ .name = "cgbc-gpio" },
+	{
+		.name = "cgbc-gpio",
+		.platform_data = &cgbc_gpio_pdata,
+		.pdata_size = sizeof(cgbc_gpio_pdata),
+	},
 	{ .name = "cgbc-hwmon" },
 	{
 		.name = "cgbc-i2c",

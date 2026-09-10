@@ -8,11 +8,13 @@
 
 #include <linux/gpio/driver.h>
 #include <linux/mfd/cgbc.h>
+#include <linux/minmax.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
+#include <linux/platform_data/gpio/gpio-cgbc.h>
 #include <linux/platform_device.h>
 
-#define CGBC_GPIO_NGPIO	14
+#define CGBC_GPIO_MAX_NGPIO	14
 
 #define CGBC_GPIO_CMD_GET	0x64
 #define CGBC_GPIO_CMD_SET	0x65
@@ -150,6 +152,7 @@ static int cgbc_gpio_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct cgbc_device_data *cgbc = dev_get_drvdata(dev->parent);
+	struct cgbc_gpio_platform_data *pdata;
 	struct cgbc_gpio_data *gpio;
 	struct gpio_chip *chip;
 	int ret;
@@ -157,6 +160,10 @@ static int cgbc_gpio_probe(struct platform_device *pdev)
 	gpio = devm_kzalloc(dev, sizeof(*gpio), GFP_KERNEL);
 	if (!gpio)
 		return -ENOMEM;
+
+	pdata = dev_get_platdata(dev);
+	if (!pdata)
+		return dev_err_probe(dev, -ENODEV, "missing platform_data\n");
 
 	gpio->cgbc = cgbc;
 
@@ -172,7 +179,7 @@ static int cgbc_gpio_probe(struct platform_device *pdev)
 	chip->get_direction = cgbc_gpio_get_direction;
 	chip->get = cgbc_gpio_get;
 	chip->set = cgbc_gpio_set;
-	chip->ngpio = CGBC_GPIO_NGPIO;
+	chip->ngpio = MIN(pdata->ngpio, CGBC_GPIO_MAX_NGPIO);
 
 	ret = devm_mutex_init(dev, &gpio->lock);
 	if (ret)

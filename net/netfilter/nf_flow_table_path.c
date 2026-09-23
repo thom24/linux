@@ -51,6 +51,7 @@ static int nft_dev_fill_forward_path(const struct nf_flow_route *route,
 	struct net_device *dev = dst_cache->dev;
 	struct net_device_path_ctx ctx = {
 		.dev = dev,
+		.ieee80211 = true,
 	};
 	struct neighbour *n;
 	u8 nud_state;
@@ -107,6 +108,7 @@ static void nft_dev_path_info(const struct net_device_path_stack *stack,
 		path = &stack->path[i];
 		switch (path->type) {
 		case DEV_PATH_ETHERNET:
+		case DEV_PATH_IEEE80211:
 		case DEV_PATH_DSA:
 		case DEV_PATH_VLAN:
 		case DEV_PATH_PPPOE:
@@ -114,7 +116,8 @@ static void nft_dev_path_info(const struct net_device_path_stack *stack,
 			if (is_zero_ether_addr(info->h_source))
 				memcpy(info->h_source, path->dev->dev_addr, ETH_ALEN);
 
-			if (path->type == DEV_PATH_ETHERNET)
+			if (path->type == DEV_PATH_ETHERNET ||
+			    path->type == DEV_PATH_IEEE80211)
 				break;
 			if (path->type == DEV_PATH_DSA) {
 				i = stack->num_paths;

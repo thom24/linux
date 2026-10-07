@@ -511,6 +511,7 @@ impl<T: ConfigOps + Default> Config<T> {
     extern "C" fn config_clks(
         dev: *mut bindings::device,
         opp_table: *mut bindings::opp_table,
+        _old_opp: *mut bindings::dev_pm_opp,
         opp: *mut bindings::dev_pm_opp,
         _data: *mut c_void,
         scaling_down: bool,

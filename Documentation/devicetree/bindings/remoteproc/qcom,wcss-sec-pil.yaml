@@ -25,8 +25,9 @@ properties:
     maxItems: 1
 
   firmware-name:
-    maxItems: 1
-    description: Firmware name for the Hexagon core
+    minItems: 1
+    maxItems: 3
+    description: Main Hexagon firmware followed by optional auxiliary firmware
 
   interrupts:
     items:

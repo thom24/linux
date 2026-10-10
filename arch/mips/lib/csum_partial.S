@@ -14,6 +14,7 @@
 #include <linux/export.h>
 #include <asm/asm.h>
 #include <asm/asm-offsets.h>
+#include <asm/isa-rev.h>
 #include <asm/regdef.h>
 
 #ifdef CONFIG_64BIT
@@ -54,7 +55,43 @@
 
 #endif /* USE_DOUBLE */
 
+/*
+ * maddu accumulates a 32-bit word into HI:LO in a single instruction and was
+ * added in MIPS32; MIPS32r6 removed it again.
+ */
+#if !defined(USE_DOUBLE) && MIPS_ISA_REV >= 1 && MIPS_ISA_REV < 6
+#define USE_MADDU
+#define BLOCK_SHIFT	0x5
+#else
+#define BLOCK_SHIFT	0x7
+#endif
+
 #define UNIT(unit)  ((unit)*NBYTES)
+
+/*
+ * Accumulate 32 bytes into HI:LO, branching back to loop until src reaches
+ * end. One load sits between two accumulates, so that cores whose multiplier
+ * stalls back-to-back accumulates can overlap the two streams.
+ */
+#define CSUM_MADDU_BLOCK(src, end, loop)				\
+	lw	t0, 0x00(src);					\
+	lw	t1, 0x04(src);					\
+	lw	t3, 0x08(src);					\
+	maddu	t0, t6;						\
+	lw	t4, 0x0c(src);					\
+	maddu	t1, t6;						\
+	lw	t0, 0x10(src);					\
+	maddu	t3, t6;						\
+	lw	t1, 0x14(src);					\
+	maddu	t4, t6;						\
+	lw	t3, 0x18(src);					\
+	maddu	t0, t6;						\
+	lw	t4, 0x1c(src);					\
+	PTR_ADDU	src, src, 0x20;				\
+	maddu	t1, t6;						\
+	maddu	t3, t6;						\
+	bne	src, end, loop;					\
+	 maddu	t4, t6
 
 #define ADDC(sum,reg)						\
 	.set	push;						\
@@ -141,6 +178,9 @@ EXPORT_SYMBOL(csum_partial)
 	bnez	t8, .Ldo_end_words
 	 move	t8, a1
 
+#ifdef USE_MADDU
+	LONG_SRL	t8, a1, BLOCK_SHIFT
+#else
 	andi	t8, src, 0x4
 	beqz	t8, .Lqword_align
 	 andi	t8, src, 0x8
@@ -171,7 +211,7 @@ EXPORT_SYMBOL(csum_partial)
 
 .Loword_align:
 	beqz	t8, .Lbegin_movement
-	 LONG_SRL	t8, a1, 0x7
+	 LONG_SRL	t8, a1, BLOCK_SHIFT
 
 #ifdef USE_DOUBLE
 	ld	t0, 0x00(src)
@@ -183,9 +223,40 @@ EXPORT_SYMBOL(csum_partial)
 #endif
 	LONG_SUBU	a1, a1, 0x10
 	PTR_ADDU	src, src, 0x10
-	LONG_SRL	t8, a1, 0x7
+	LONG_SRL	t8, a1, BLOCK_SHIFT
+#endif /* USE_MADDU */
 
 .Lbegin_movement:
+#ifdef USE_MADDU
+	li	t6, 1
+	LONG_SLL	t8, t8, BLOCK_SHIFT
+	PTR_ADDU	t8, src, t8
+	multu	sum, t6			/* mtlo would be restricted here */
+
+#ifdef CONFIG_CPU_HAS_PREFETCH
+	/*
+	 * Fetch 256 bytes ahead, but only addresses the loop loads itself
+	 * later: on non-coherent systems any other line could belong to a
+	 * buffer the device still owns.
+	 */
+	PTR_SUBU	t5, t8, 0x100
+	sltu	t2, src, t5
+	beqz	t2, .Lmove_maddu
+	 nop
+
+.Lmove_maddu_pref:
+	pref	0, 0x100(src)
+	CSUM_MADDU_BLOCK(src, t5, .Lmove_maddu_pref)
+#endif
+
+.Lmove_maddu:
+	CSUM_MADDU_BLOCK(src, t8, .Lmove_maddu)
+
+	mflo	sum
+	mfhi	t1
+	ADDC(sum, t1)
+	andi	t8, a1, 0x1c
+#else
 	beqz	t8, 1f
 	 andi	t2, a1, 0x40
 
@@ -217,6 +288,7 @@ EXPORT_SYMBOL(csum_partial)
 	CSUM_BIGCHUNK(src, 0x00, sum, t0, t1, t3, t4)
 	andi	t8, a1, 0x1c
 	PTR_ADDU	src, src, 0x20
+#endif /* USE_MADDU */
 
 .Ldo_end_words:
 	beqz	t8, .Lsmall_csumcpy

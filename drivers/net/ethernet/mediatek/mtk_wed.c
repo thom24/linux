@@ -2029,6 +2029,21 @@ mtk_wed_flow_flush(struct mtk_wed_device *dev, u16 wcid,
 	mtk_flow_offload_unbind_wcid(dev->hw->eth, dev->hw->index, wcid, &m);
 }
 
+static int
+mtk_wed_flow_idle(struct mtk_wed_device *dev, u16 wcid,
+		  bool (*match)(const struct cfg80211_flow_info *info,
+				bool rx, void *arg),
+		  void *arg)
+{
+	struct mtk_flow_match m = {
+		.fn = match,
+		.arg = arg,
+	};
+
+	return mtk_flow_offload_idle_wcid(dev->hw->eth, dev->hw->index, wcid,
+					  &m);
+}
+
 static void
 mtk_wed_configure_irq(struct mtk_wed_device *dev, u32 irq_mask)
 {
@@ -2867,6 +2882,7 @@ void mtk_wed_add_hw(struct device_node *np, struct mtk_eth *eth,
 		.msdu_pg_rx_ring_setup = mtk_wed_msdu_pg_rx_ring_setup,
 		.ind_rx_ring_setup = mtk_wed_ind_rx_ring_setup,
 		.flow_flush = mtk_wed_flow_flush,
+		.flow_idle = mtk_wed_flow_idle,
 	};
 	struct device_node *eth_np = eth->dev->of_node;
 	struct platform_device *pdev;

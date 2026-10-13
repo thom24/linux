@@ -1112,6 +1112,52 @@ out:
 	spin_unlock_bh(&ppe_lock);
 }
 
+/* Seconds since the hardware last hit a matching entry, negative when none */
+int mtk_foe_entry_flow_idle(struct mtk_ppe *ppe, struct mtk_flow_entry *entry,
+			    bool rx, const struct mtk_flow_match *match)
+{
+	struct mtk_foe_entry foe = {}, *hwe;
+	struct mtk_flow_entry *cur;
+	int idle = -ENOENT;
+	int len;
+
+	spin_lock_bh(&ppe_lock);
+
+	if (entry->type == MTK_FLOW_TYPE_L2) {
+		hlist_for_each_entry(cur, &entry->l2_flows, l2_list) {
+			int cur_idle;
+
+			if (!mtk_foe_subflow_match(ppe, cur, rx, match))
+				continue;
+
+			hwe = mtk_foe_get_entry(ppe, cur->hash);
+			cur_idle = __mtk_foe_entry_idle_time(ppe,
+							     READ_ONCE(hwe->ib1));
+			if (idle < 0 || cur_idle < idle)
+				idle = cur_idle;
+		}
+		goto out;
+	}
+
+	if (entry->hash == 0xffff)
+		goto out;
+
+	hwe = mtk_foe_get_entry(ppe, entry->hash);
+	len = mtk_flow_entry_match_len(ppe->eth, &entry->data);
+	memcpy(&foe, hwe, len);
+	if (FIELD_GET(MTK_FOE_IB1_STATE, foe.ib1) != MTK_FOE_STATE_BIND ||
+	    !mtk_flow_entry_match(ppe->eth, entry, &foe, len) ||
+	    !mtk_foe_entry_flow_match(ppe, &entry->data, rx, false, match))
+		goto out;
+
+	idle = __mtk_foe_entry_idle_time(ppe, foe.ib1);
+
+out:
+	spin_unlock_bh(&ppe_lock);
+
+	return idle;
+}
+
 int mtk_ppe_prepare_reset(struct mtk_ppe *ppe)
 {
 	if (!ppe)

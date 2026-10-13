@@ -423,6 +423,8 @@ int mtk_foe_entry_commit(struct mtk_ppe *ppe, struct mtk_flow_entry *entry);
 void mtk_foe_entry_clear(struct mtk_ppe *ppe, struct mtk_flow_entry *entry);
 void mtk_foe_entry_unbind(struct mtk_ppe *ppe, struct mtk_flow_entry *entry,
 			  bool rx, const struct mtk_flow_match *match);
+int mtk_foe_entry_flow_idle(struct mtk_ppe *ppe, struct mtk_flow_entry *entry,
+			    bool rx, const struct mtk_flow_match *match);
 int mtk_ppe_debugfs_init(struct mtk_ppe *ppe, int index);
 void mtk_foe_entry_get_stats(struct mtk_ppe *ppe, struct mtk_flow_entry *entry,
 			     int *idle);

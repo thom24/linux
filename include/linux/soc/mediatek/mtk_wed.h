@@ -233,6 +233,10 @@ struct mtk_wed_ops {
 			   bool (*match)(const struct cfg80211_flow_info *info,
 					 bool rx, void *arg),
 			   void *arg);
+	int (*flow_idle)(struct mtk_wed_device *dev, u16 wcid,
+			 bool (*match)(const struct cfg80211_flow_info *info,
+				       bool rx, void *arg),
+			 void *arg);
 };
 
 extern const struct mtk_wed_ops __rcu *mtk_soc_wed_ops;
@@ -314,6 +318,8 @@ static inline bool mtk_wed_is_amsdu_supported(struct mtk_wed_device *dev)
 	(_dev)->ops->ind_rx_ring_setup(_dev, _regs)
 #define mtk_wed_device_flow_flush(_dev, _wcid, _match, _arg) \
 	(_dev)->ops->flow_flush(_dev, _wcid, _match, _arg)
+#define mtk_wed_device_flow_idle(_dev, _wcid, _match, _arg) \
+	(_dev)->ops->flow_idle(_dev, _wcid, _match, _arg)
 
 #else
 static inline bool mtk_wed_device_active(struct mtk_wed_device *dev)
@@ -341,6 +347,8 @@ static inline bool mtk_wed_device_active(struct mtk_wed_device *dev)
 #define mtk_wed_device_ind_rx_ring_setup(_dev, _regs) -ENODEV
 #define mtk_wed_device_flow_flush(_dev, _wcid, _match, _arg) \
 	do { (void)(_match); (void)(_arg); } while (0)
+#define mtk_wed_device_flow_idle(_dev, _wcid, _match, _arg) \
+	({ (void)(_match); (void)(_arg); -ENODEV; })
 #endif
 
 #endif

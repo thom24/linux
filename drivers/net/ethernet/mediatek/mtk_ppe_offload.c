@@ -705,6 +705,36 @@ void mtk_flow_offload_unbind_wcid(struct mtk_eth *eth, int wed_index, u16 wcid,
 				   mtk_flow_entry_unbind_cb, match);
 }
 
+struct mtk_flow_idle {
+	const struct mtk_flow_match *match;
+	int idle;
+};
+
+static void
+mtk_flow_entry_idle_cb(struct mtk_ppe *ppe, struct mtk_flow_entry *entry,
+		       bool rx, void *arg)
+{
+	struct mtk_flow_idle *data = arg;
+	int idle = mtk_foe_entry_flow_idle(ppe, entry, rx, data->match);
+
+	if (idle >= 0 && (data->idle < 0 || idle < data->idle))
+		data->idle = idle;
+}
+
+int mtk_flow_offload_idle_wcid(struct mtk_eth *eth, int wed_index, u16 wcid,
+			       const struct mtk_flow_match *match)
+{
+	struct mtk_flow_idle data = {
+		.match = match,
+		.idle = -ENOENT,
+	};
+
+	mtk_flow_offload_walk_wcid(eth, wed_index, wcid,
+				   mtk_flow_entry_idle_cb, &data);
+
+	return data.idle;
+}
+
 static int
 mtk_eth_setup_tc_block_cb(enum tc_setup_type type, void *type_data, void *cb_priv)
 {

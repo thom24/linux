@@ -1485,6 +1485,17 @@ static int stmmac_init_rx_buffers(struct stmmac_priv *priv,
 		stmmac_set_desc_sec_addr(priv, p, buf->sec_addr, true);
 	}
 
+	if (stmmac_rx_check_buf2_cap(priv)) {
+		if (!buf->sec_page) {
+			buf->sec_page = page_pool_alloc_pages(rx_q->page_pool,
+							      gfp);
+			if (!buf->sec_page)
+				return -ENOMEM;
+		}
+		buf->sec_addr = page_pool_get_dma_addr(buf->sec_page);
+		stmmac_set_desc_sec_addr(priv, p, buf->sec_addr, true);
+	}
+
 	buf->addr = page_pool_get_dma_addr(buf->page) + buf->page_offset;
 
 	stmmac_set_desc_addr(priv, p, buf->addr);
@@ -1908,19 +1919,6 @@ static void dma_free_tx_skbufs(struct stmmac_priv *priv,
 		tx_q->xsk_frames_done = 0;
 		tx_q->xsk_pool = NULL;
 	}
-}
-
-/**
- * stmmac_free_tx_skbufs - free TX skb buffers
- * @priv: private structure
- */
-static void stmmac_free_tx_skbufs(struct stmmac_priv *priv)
-{
-	u32 tx_queue_cnt = priv->plat->tx_queues_to_use;
-	u32 queue;
-
-	for (queue = 0; queue < tx_queue_cnt; queue++)
-		dma_free_tx_skbufs(priv, &priv->dma_conf, queue);
 }
 
 /**
@@ -7939,6 +7937,68 @@ static void stmmac_reset_rx_queue(struct stmmac_priv *priv, u32 queue)
 	rx_q->dirty_rx = 0;
 }
 
+static int stmmac_resume_rx_descriptors(struct stmmac_priv *priv,
+					struct stmmac_dma_conf *dma_conf,
+					u32 queue)
+{
+	struct stmmac_rx_queue *rx_q = &dma_conf->rx_queue[queue];
+	int i;
+	int ret;
+
+	for (i = 0; i < dma_conf->dma_rx_size; i++) {
+		struct stmmac_rx_buffer *buf = &rx_q->buf_pool[i];
+		dma_addr_t dma_addr;
+		struct dma_desc *p;
+
+		if (priv->extend_desc)
+			p = &rx_q->dma_erx[i].basic;
+		else
+			p = &rx_q->dma_rx[i];
+
+		if (rx_q->xsk_pool) {
+			if (!buf->xdp) {
+				buf->xdp = xsk_buff_alloc(rx_q->xsk_pool);
+				if (!buf->xdp)
+					return -ENOMEM;
+				}
+			dma_addr = xsk_buff_xdp_get_dma(buf->xdp);
+			stmmac_set_desc_addr(priv, p, dma_addr);
+			stmmac_set_desc_sec_addr(priv, p, 0, false);
+		} else {
+			ret = stmmac_init_rx_buffers(priv, dma_conf, p, i,
+						     GFP_KERNEL, queue);
+			if (ret)
+				return ret;
+		}
+	}
+
+	return 0;
+}
+
+static int stmmac_resume_descriptors(struct stmmac_priv *priv,
+				     struct stmmac_dma_conf *dma_conf)
+{
+	u32 rx_queue_cnt = priv->plat->rx_queues_to_use;
+	u32 tx_queue_cnt = priv->plat->tx_queues_to_use;
+	u32 queue;
+	int ret;
+
+	for (queue = 0; queue < rx_queue_cnt; queue++) {
+		ret = stmmac_resume_rx_descriptors(priv, dma_conf, queue);
+		if (ret)
+			return ret;
+
+		stmmac_clear_rx_descriptors(priv, dma_conf, queue);
+	}
+
+	for (queue = 0; queue < tx_queue_cnt; queue++) {
+		dma_free_tx_skbufs(priv, &priv->dma_conf, queue);
+		stmmac_clear_tx_descriptors(priv, dma_conf, queue);
+	}
+
+	return 0;
+}
+
 static void stmmac_reset_tx_queue(struct stmmac_priv *priv, u32 queue)
 {
 	struct stmmac_tx_queue *tx_q = &priv->dma_conf.tx_queue[queue];
@@ -8027,17 +8087,19 @@ int stmmac_resume(struct device *dev)
 
 	mutex_lock(&priv->lock);
 
-	stmmac_reset_queues_param(priv);
+	ret = stmmac_resume_descriptors(priv, &priv->dma_conf);
+	if (ret < 0) {
+		netdev_err(priv->dev, "%s: Resume descriptor failed\n",
+			   __func__);
+		goto err;
+	}
 
-	stmmac_free_tx_skbufs(priv);
-	stmmac_clear_descriptors(priv, &priv->dma_conf);
+	stmmac_reset_queues_param(priv);
 
 	ret = stmmac_hw_setup(ndev);
 	if (ret < 0) {
 		netdev_err(priv->dev, "%s: Hw setup failed\n", __func__);
-		mutex_unlock(&priv->lock);
-		rtnl_unlock();
-		return ret;
+		goto err;
 	}
 
 	stmmac_init_timestamping(priv);
@@ -8067,6 +8129,11 @@ int stmmac_resume(struct device *dev)
 	netif_device_attach(ndev);
 
 	return 0;
+
+err:
+	mutex_unlock(&priv->lock);
+	rtnl_unlock();
+	return ret;
 }
 EXPORT_SYMBOL_GPL(stmmac_resume);
 

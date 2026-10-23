@@ -220,8 +220,8 @@ config AX88796B_PHY
 	  AX88796B package.
 
 config AX88796B_RUST_PHY
-	bool "Rust reference driver for Asix PHYs"
-	depends on RUST_PHYLIB_ABSTRACTIONS && AX88796B_PHY
+	tristate "Rust reference driver for Asix PHYs"
+	depends on RUST_PHYLIB_ABSTRACTIONS
 	help
 	  Uses the Rust reference driver for Asix PHYs (ax88796b_rust.ko).
 	  The features are equivalent. It supports the Asix Electronics PHY

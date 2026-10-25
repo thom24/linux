@@ -426,6 +426,12 @@ static void sfp_fixup_nokia(struct sfp *sfp)
 	sfp_fixup_ignore_los(sfp);
 }
 
+static void sfp_fixup_zyxel(struct sfp *sfp)
+{
+	sfp_fixup_ignore_tx_fault_and_los(sfp);
+	sfp->module_t_wait = T_START_UP_BAD_GPON;
+}
+
 // For 10GBASE-T short-reach modules
 static void sfp_fixup_10gbaset_30m(struct sfp *sfp)
 {
@@ -663,6 +669,7 @@ static const struct sfp_quirk sfp_quirks[] = {
 
 	SFP_QUIRK_S("ZOERAX", "SFP-2.5G-T", sfp_quirk_oem_2_5g),
 	SFP_QUIRK_S("TP-LINK", "TL-SM410U", sfp_quirk_oem_2_5g),
+	SFP_QUIRK("ZYXEL", "PMG3000-D20B", sfp_quirk_disable_autoneg, sfp_fixup_zyxel),
 };
 
 static size_t sfp_strlen(const char *str, size_t maxlen)

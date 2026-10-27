@@ -623,7 +623,7 @@ mtk_wed_amsdu_init(struct mtk_wed_device *dev)
 
 	/* init partial amsdu offload txd src */
 	wed_set(dev, MTK_WED_AMSDU_HIFTXD_CFG,
-		FIELD_PREP(MTK_WED_AMSDU_HIFTXD_SRC, dev->hw->index));
+		FIELD_PREP(MTK_WED_AMSDU_HIFTXD_SRC, !!dev->hw->index));
 
 	/* init qmem */
 	wed_set(dev, MTK_WED_AMSDU_PSE, MTK_WED_AMSDU_PSE_RESET);
@@ -1137,6 +1137,18 @@ mtk_wed_deinit(struct mtk_wed_device *dev)
 	}
 }
 
+static bool
+mtk_wed_other_attached(struct mtk_wed_hw *hw)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(hw_list); i++)
+		if (hw_list[i] && hw_list[i] != hw && hw_list[i]->wed_dev)
+			return true;
+
+	return false;
+}
+
 static void
 __mtk_wed_detach(struct mtk_wed_device *dev)
 {
@@ -1170,8 +1182,7 @@ __mtk_wed_detach(struct mtk_wed_device *dev)
 					   BIT(hw->index), BIT(hw->index));
 	}
 
-	if ((!hw_list[!hw->index] || !hw_list[!hw->index]->wed_dev) &&
-	    hw->eth->dma_dev != hw->eth->dev)
+	if (!mtk_wed_other_attached(hw) && hw->eth->dma_dev != hw->eth->dev)
 		mtk_eth_set_dma_device(hw->eth, hw->eth->dev);
 
 	memset(dev, 0, sizeof(*dev));
@@ -2482,7 +2493,7 @@ mtk_wed_attach(struct mtk_wed_device *dev)
 			 "mtk_wed_attach without holding the RCU read lock");
 
 	if ((dev->wlan.bus_type == MTK_WED_BUS_PCIE &&
-	     pci_domain_nr(dev->wlan.pci_dev->bus) > 1) ||
+	     pci_domain_nr(dev->wlan.pci_dev->bus) >= ARRAY_SIZE(hw_list)) ||
 	    !try_module_get(THIS_MODULE))
 		ret = -ENODEV;
 

@@ -80,6 +80,17 @@ struct led_netdev_data {
 
 static const struct attribute_group netdev_trig_link_speed_attrs_group;
 
+/* True while the software activity worker should keep polling and blinking. */
+static bool netdev_trig_sw_blink(struct led_netdev_data *trigger_data)
+{
+	return trigger_data->net_dev && !trigger_data->hw_control &&
+	       trigger_data->carrier_link_up &&
+	       (test_bit(TRIGGER_NETDEV_TX, &trigger_data->mode) ||
+		test_bit(TRIGGER_NETDEV_RX, &trigger_data->mode) ||
+		test_bit(TRIGGER_NETDEV_TX_ERR, &trigger_data->mode) ||
+		test_bit(TRIGGER_NETDEV_RX_ERR, &trigger_data->mode));
+}
+
 static void set_baseline_state(struct led_netdev_data *trigger_data)
 {
 	int current_brightness;
@@ -147,10 +158,7 @@ static void set_baseline_state(struct led_netdev_data *trigger_data)
 		/* If we are looking for RX/TX start periodically
 		 * checking stats
 		 */
-		if (test_bit(TRIGGER_NETDEV_TX, &trigger_data->mode) ||
-		    test_bit(TRIGGER_NETDEV_RX, &trigger_data->mode) ||
-		    test_bit(TRIGGER_NETDEV_TX_ERR, &trigger_data->mode) ||
-		    test_bit(TRIGGER_NETDEV_RX_ERR, &trigger_data->mode))
+		if (netdev_trig_sw_blink(trigger_data))
 			schedule_delayed_work(&trigger_data->work, 0);
 	}
 }
@@ -360,7 +368,7 @@ static ssize_t netdev_led_attr_store(struct device *dev, const char *buf,
 {
 	struct led_netdev_data *trigger_data = led_trigger_get_drvdata(dev);
 	struct led_classdev *led_cdev = trigger_data->led_cdev;
-	unsigned long state, mode = trigger_data->mode;
+	unsigned long state, mode;
 	int ret;
 	int bit;
 
@@ -388,6 +396,10 @@ static ssize_t netdev_led_attr_store(struct device *dev, const char *buf,
 		return -EINVAL;
 	}
 
+	/* async cancel: the worker takes this lock */
+	mutex_lock(&trigger_data->lock);
+
+	mode = trigger_data->mode;
 	if (state)
 		set_bit(bit, &mode);
 	else
@@ -399,19 +411,25 @@ static ssize_t netdev_led_attr_store(struct device *dev, const char *buf,
 	     test_bit(TRIGGER_NETDEV_LINK_1000, &mode) ||
 	     test_bit(TRIGGER_NETDEV_LINK_2500, &mode) ||
 	     test_bit(TRIGGER_NETDEV_LINK_5000, &mode) ||
-	     test_bit(TRIGGER_NETDEV_LINK_10000, &mode)))
+	     test_bit(TRIGGER_NETDEV_LINK_10000, &mode))) {
+		mutex_unlock(&trigger_data->lock);
 		return -EINVAL;
+	}
 
-	cancel_delayed_work_sync(&trigger_data->work);
+	cancel_delayed_work(&trigger_data->work);
 
 	trigger_data->mode = mode;
 	trigger_data->hw_control = can_hw_control(trigger_data);
 
 	if (!led_cdev->brightness_set && !led_cdev->brightness_set_blocking &&
-	    !trigger_data->hw_control)
+	    !trigger_data->hw_control) {
+		mutex_unlock(&trigger_data->lock);
 		return -EOPNOTSUPP;
+	}
 
 	set_baseline_state(trigger_data);
+
+	mutex_unlock(&trigger_data->lock);
 
 	return size;
 }
@@ -460,9 +478,6 @@ static ssize_t interval_store(struct device *dev,
 	unsigned long value;
 	int ret;
 
-	if (trigger_data->hw_control)
-		return -EINVAL;
-
 	ret = kstrtoul(buf, 0, &value);
 	if (ret)
 		return ret;
@@ -471,10 +486,20 @@ static ssize_t interval_store(struct device *dev,
 	if (value < 5 || value > 10000)
 		return -EINVAL;
 
-	cancel_delayed_work_sync(&trigger_data->work);
+	/* async cancel: the worker takes this lock */
+	mutex_lock(&trigger_data->lock);
+
+	if (trigger_data->hw_control) {
+		mutex_unlock(&trigger_data->lock);
+		return -EINVAL;
+	}
+
+	cancel_delayed_work(&trigger_data->work);
 
 	atomic_set(&trigger_data->interval, msecs_to_jiffies(value));
 	set_baseline_state(trigger_data);	/* resets timer */
+
+	mutex_unlock(&trigger_data->lock);
 
 	return size;
 }
@@ -649,11 +674,8 @@ static void netdev_trig_work(struct work_struct *work)
 		return;
 	}
 
-	/* If we are not looking for RX/TX then return  */
-	if (!test_bit(TRIGGER_NETDEV_TX, &trigger_data->mode) &&
-	    !test_bit(TRIGGER_NETDEV_RX, &trigger_data->mode) &&
-	    !test_bit(TRIGGER_NETDEV_TX_ERR, &trigger_data->mode) &&
-	    !test_bit(TRIGGER_NETDEV_RX_ERR, &trigger_data->mode)) {
+	/* Nothing to do under hw offload or without RX/TX monitoring */
+	if (!netdev_trig_sw_blink(trigger_data)) {
 		mutex_unlock(&trigger_data->lock);
 		return;
 	}

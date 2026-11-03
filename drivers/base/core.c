@@ -173,6 +173,7 @@ void fwnode_links_purge(struct fwnode_handle *fwnode)
 	fwnode_links_purge_suppliers(fwnode);
 	fwnode_links_purge_consumers(fwnode);
 }
+EXPORT_SYMBOL_GPL(fwnode_links_purge);
 
 void fw_devlink_purge_absent_suppliers(struct fwnode_handle *fwnode)
 {

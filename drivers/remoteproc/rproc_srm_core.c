@@ -241,8 +241,6 @@ static void rproc_srm_core_unprepare(struct rproc_subdev *subdev)
  */
 static void rproc_srm_core_purge_fwnode_links(struct device *dev)
 {
-	struct device_node *child;
-
 	/* Links already picked up on the SRM core node itself. */
 	fwnode_links_purge(of_fwnode_handle(dev->of_node));
 

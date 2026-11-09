@@ -265,7 +265,7 @@ int hantro_g1_jpeg_dec_run(struct hantro_ctx *ctx)
 	if (header.frame.width != width ||
 	    MB_HEIGHT(header.frame.height) != MB_HEIGHT(height)) {
 		dev_err(vpu->dev,
-			"Resolution mismatch: %dx%d (JPEG) versus %lux%lu (user)",
+			"Resolution mismatch: %dx%d (JPEG) versus %zux%zu (user)",
 			header.frame.width, header.frame.height, width, height);
 		hantro_end_prepare_run(ctx);
 		return -EINVAL;

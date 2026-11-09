@@ -1480,7 +1480,7 @@ void hantro_h1_vp8_enc_done(struct hantro_ctx *ctx)
 	/* Guard against hardware header overflow */
 	if (ctrl_buf->hw_hdr_size > ctx->vp8_enc.estimated_hdr_size) {
 		dst_buf->flags |= V4L2_BUF_FLAG_ERROR;
-		vpu_debug(0, "Header buffer overflow (%d > %lu)",
+		vpu_debug(0, "Header buffer overflow (%d > %zu)",
 			  ctrl_buf->hw_hdr_size, ctx->vp8_enc.estimated_hdr_size);
 		return;
 	}
@@ -1488,7 +1488,7 @@ void hantro_h1_vp8_enc_done(struct hantro_ctx *ctx)
 	/* Guard against DCT overflow */
 	if (ctrl_buf->dct_size > (dst_size - ctx->vp8_enc.estimated_hdr_size)) {
 		dst_buf->flags |= V4L2_BUF_FLAG_ERROR;
-		vpu_debug(0, "DCT buffer overflow (%d > %lu), enlarge compressed buffer or decrease quality",
+		vpu_debug(0, "DCT buffer overflow (%d > %zu), enlarge compressed buffer or decrease quality",
 			  ctrl_buf->dct_size, dst_size - ctx->vp8_enc.estimated_hdr_size);
 		return;
 	}
